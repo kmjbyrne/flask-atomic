@@ -1,13 +1,13 @@
-mport
-unittest
+import unittest
 from datetime import datetime
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from swisstools import models
+
+from kbpc.db.flaskalchemy import serializer
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
 db = SQLAlchemy(app)
 
 
@@ -66,12 +66,12 @@ class TestTransform(unittest.TestCase):
         pass
 
     def test_get_relationship_keys(self):
-        response = models.get_relationship_keys(self.fixed_instance)
+        response = serializer.get_relationship_keys(self.fixed_instance)
         expected = ['TestRelationship']
         self.assertEqual(expected, response)
 
     def test_convert(self):
-        response = models.convert(self.fixed_instance)
+        response = serializer.convert(self.fixed_instance)
         expected = dict(id=self.fixed_instance.id, name='John Doe', age=20, dob=self.now)
         response_item = dict(
             id=response.get('id'),
@@ -84,12 +84,12 @@ class TestTransform(unittest.TestCase):
     def test_merge_column_sets(self):
         base_set = {1, 2, 3, 4, 5}
         difference_set = {3, 4}
-        response = models.merge_column_sets(base_set, difference_set)
+        response = serializer.merge_column_sets(base_set, difference_set)
         expected = {1, 2, 5}
         self.assertEqual(response, expected)
 
     def test_unpack(self):
-        response = models.unpack(self.fixed_instance)
+        response = serializer.serialize(self.fixed_instance)
 
         self.assertIsInstance(response, dict)
         self.assertEqual(response.get('id'), self.fixed_instance.id)
@@ -98,7 +98,7 @@ class TestTransform(unittest.TestCase):
         self.assertEqual(response.get('dob'), self.fixed_instance.dob)
 
     def test_unpack_with_relationship(self):
-        response = models.unpack(self.fixed_relationship_instance, include_relationship=True)
+        response = serializer.serialize(self.fixed_relationship_instance, include_relationship=True)
 
         self.assertIsInstance(response, dict)
         self.assertEqual(response.get('id'), self.fixed_relationship_instance.id)
@@ -115,7 +115,7 @@ class TestTransform(unittest.TestCase):
             'test_relationship': ['id'],
             'test_model': ['id']
         }
-        response = models.unpack(self.fixed_relationship_instance, exclusions, include_relationship=True)
+        response = serializer.serialize(self.fixed_relationship_instance, exclusions, include_relationship=True)
 
         self.assertIsInstance(response, dict)
         self.assertNotIn(self.fixed_relationship_instance.id, response.keys())
