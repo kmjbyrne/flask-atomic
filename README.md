@@ -5,8 +5,36 @@
 [![Build Status](https://travis-ci.org/kmjbyrne/kbpc.svg?branch=master)](https://travis-ci.org/kmjbyrne/kbpc)
 [![Coverage Status](https://coveralls.io/repos/github/kmjbyrne/kbpc/badge.svg?branch=master)](https://coveralls.io/github/kmjbyrne/kbpc?branch=master)
 
+Table of contents
+=================
 
-## Database Helpers
+<!--ts-->
+
+* [Database](#database)
+    * [Models](#models)
+        * [User](#user)
+            * [User Model](#user-model)
+            * [User DAO](#user-dao)
+    * [Serializer](#flask-alchemy-model-serializer)
+* [Common](#common)
+    * [Exceptions](#exceptions)
+    
+<!--te-->
+
+## Database
+
+
+### Models
+
+#### User Model
+
+Docs coming soon
+
+#### User DAO
+
+Docs coming soon
+
+---
 
 ### Flask Alchemy Model Serializer
 
@@ -55,4 +83,6 @@ transformed_model = serializer.serialize(model, exclusions)
 
 # This however is serializable immediately
 json = jsonify(data=transformed_model)
+
 ```
+
