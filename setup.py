@@ -1,30 +1,29 @@
 from setuptools import setup
 
-
-def readme():
-    with open('README.md') as f:
-        return f.read()
-
+with open("README.md", "r") as fh:
+    long_description = fh.read()
 
 setup(
     name='kbpc',
     version='0.1.2',
     description='Reusable Python code for projects',
-    long_description=readme(),
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.7',
     ],
     keywords='python library utilities',
-    url='https://github.com/kmjbyrne/kbpc/releases/tag/0.1.2',
+    url='https://github.com/kmjbyrne/kbpc',
     author='Keith Byrne',
     author_email='keithmbyrne@gmail.com',
     license='MIT',
     packages=['kbpc'],
-    # install_requires=[
-    #     'markdown',
-    # ],
+    install_requires=[
+        'markdown',
+    ],
+
     test_suite='nose.collector',
     tests_require=['nose', 'nose-cover3'],
     entry_points={
