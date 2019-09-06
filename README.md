@@ -1,3 +1,10 @@
+# KBPC
+
+![GitHub](https://img.shields.io/github/license/kmjbyrne/kbpc)
+[![PyPI version](https://badge.fury.io/py/kbpc.svg)](https://badge.fury.io/py/kbpc)
+[![Build Status](https://travis-ci.org/kmjbyrne/kbpc.svg?branch=master)](https://travis-ci.org/kmjbyrne/kbpc)
+
+
 ## Database Helpers
 
 ### Flask Alchemy Model Serializer
@@ -13,11 +20,11 @@ projects over time and eventually, then started to splinter into slightly differ
 from flask import jsonify
 
 from application.models import SomeFlaskAlchemyModel
-from swiss import models
+from kbpc.db.flaskalchemy import serializer
 
 # Assume the model has name and age as the model fields
 model = SomeFlaskAlchemyModel('John Doe', 25)
-transformed_model = models.unpack(model)
+transformed_model = serializer.serialize(model)
 
 # This typically fails if you attempt it with the model.
 json = jsonify(data=model)
@@ -37,13 +44,13 @@ protected properties of that instance.
 from flask import jsonify
 
 from application.models import SomeFlaskAlchemyModel
-from swiss import models
+from kbpc.db.flaskalchemy import serializer
 
 # Assume the model has name and age as the model fields
 model = SomeFlaskAlchemyModel('John Doe', 25)
 tablename = 'tablename_of_model'
-exclusions = {tablename: ['age'])
-transformed_model = models.unpack(model, exclusions)
+exclusions = {tablename: ['age']}
+transformed_model = serializer.serialize(model, exclusions)
 
 # This however is serializable immediately
 json = jsonify(data=transformed_model)
