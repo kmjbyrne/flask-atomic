@@ -27,7 +27,7 @@ def merge_column_sets(columns: set, exclusions: set) -> set:
     return columns.difference(exclusions)
 
 
-def serialize(instance, exclusions=None) -> dict:
+def convert(instance, exclusions=None) -> dict:
     """
     Extracts a dictionary representation of a SQLAlchemy model instance
     :param instance: raw SQLAlchemy model instance
@@ -51,7 +51,7 @@ def serialize(instance, exclusions=None) -> dict:
     return resp
 
 
-def unpack(instance: {}, exclusions=None, include_relationship=False) -> dict:
+def serialize(instance: {}, exclusions=None, include_relationship=False) -> dict:
     """
     This utility function dynamically converts Alchemy model classes into a dict using introspective lookups.
     This saves on manually mapping each model and all the fields. However, exclusions should be noted.

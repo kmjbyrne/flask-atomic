@@ -8,7 +8,7 @@ def readme():
 
 setup(
     name='kbpc',
-    version='0.1',
+    version='0.1.2',
     description='Reusable Python code for projects',
     long_description=readme(),
     classifiers=[
@@ -17,7 +17,7 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     keywords='python library utilities',
-    url='http://github.com/kmjbyrne/kbpc',
+    url='https://github.com/kmjbyrne/kbpc/releases/tag/0.1.2',
     author='Keith Byrne',
     author_email='keithmbyrne@gmail.com',
     license='MIT',
