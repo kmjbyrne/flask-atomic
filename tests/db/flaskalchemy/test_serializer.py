@@ -128,7 +128,7 @@ class TestTransform(unittest.TestCase):
         self.assertEqual(response.get('model_link').get('dob'), self.fixed_relationship_instance.model_link.dob)
 
     def test_unpack_with_exclusions(self):
-        response = serializer.unpack(self.fixed_instance, {'test_model': ['id']})
+        response = serializer.serialize(self.fixed_instance, {'test_model': ['id']})
 
         self.assertIsInstance(response, dict)
         self.assertNotIn(self.fixed_instance.id, response.keys())
