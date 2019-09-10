@@ -2,7 +2,7 @@ from datetime import datetime
 
 from flask_sqlalchemy import SQLAlchemy
 
-from kbpc.db.flaskalchemy.database import DeclarativeBase
+from flask_kbpc.db.flaskalchemy.database import DeclarativeBase
 
 db = SQLAlchemy()
 
