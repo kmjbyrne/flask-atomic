@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash
 
 from flask_kbpc.common.exceptions import MissingConfigurationValue
 from flask_kbpc.db.models.base.base_dao import BaseDAO
-from flask_kbpc.db.models.user.user import User
+from flask_kbpc.db.models.user.user import BaseUser
 
 PASSWORD_MIN = 8
 
@@ -12,7 +12,7 @@ PASSWORD_MIN = 8
 class UserDAO(BaseDAO):
     json = False
 
-    def __init__(self, model=User):
+    def __init__(self, model=BaseUser):
         self.user = None
         self.model = model
 
@@ -36,7 +36,7 @@ class UserDAO(BaseDAO):
 
         return True
 
-    def post(self, payload):
+    def create(self, payload):
         """
         Handles the main POST logic for new user.
         :param payload: input key/values for API view.
@@ -62,13 +62,9 @@ class UserDAO(BaseDAO):
             message, code = status
             return jsonify(message=message), code
 
-        self.create(payload)
-        self.encrypt_user_password()
-        self.user.persist()
-
-        user = self.get_one_by(self.model.username.name, username, json=False)
-        user = user.prepare(rel=False, exc=[self.model.password.name], json=True)
-        return user
+        self.user = self.user.create(payload)
+        self.user.save()
+        return self.user
 
     def encrypt_user_password(self, password, config):
         """

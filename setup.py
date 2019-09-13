@@ -1,11 +1,12 @@
 from setuptools import setup
+from setuptools import find_packages
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='kbpc',
-    version='0.1.5',
+    name='Flask-KBPC',
+    version='0.1.26',
     description='Reusable Python code for projects',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -19,7 +20,7 @@ setup(
     author='Keith Byrne',
     author_email='keithmbyrne@gmail.com',
     license='MIT',
-    packages=['kbpc'],
+    packages=find_packages(),
     install_requires=[
         'markdown',
     ],

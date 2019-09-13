@@ -1,11 +1,19 @@
 from datetime import datetime
 
-from flask_sqlalchemy import Model
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import ColumnProperty
 from sqlalchemy.orm import class_mapper
+from sqlalchemy.orm import load_only
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+
+from flask_kbpc.logging.logger import get_logger
+
+Base = declarative_base()
 
 db = SQLAlchemy()
+
+logger = get_logger()
 
 
 def check_inputs(cls, field, value):
@@ -21,30 +29,54 @@ def check_inputs(cls, field, value):
     return {instrument_key: value}
 
 
-class DeclarativeBase(Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True, info={'label': 'Primary ID'})
-    active = db.Column(db.VARCHAR(2), primary_key=False, nullable=True, info={'label': 'Active'}, default='Y')
+def sessioncommit():
+    try:
+        db.session.commit()
+        db.session.close()
+    except Exception as e:
+        logger.info(str(e))
+        db.session.rollback()
+        db.session.close()
 
-    def persist(self):
-        db.session.add(self)
-        return db.session.commit()
 
-    def delete(self):
-        db.session.delete(self)
-        return db.session.commit()
+class DeclarativeBase(db.Model):
+    __abstract__ = True
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    active = db.Column(db.VARCHAR(2), primary_key=False, default='Y')
+
 
     @classmethod
-    def purge(cls):
-        cls.query.delete()
+    def fields(cls, inc=None, exc=None):
+        if inc is None:
+            inc = []
+        if exc is None:
+            exc = []
+
+        normalised_fields = []
+        for field in list(key for key in cls.keys() if key not in exc):
+            if isinstance(field, InstrumentedAttribute):
+                normalised_fields.append(field.name)
+            else:
+                normalised_fields.append(field)
+
+        return normalised_fields
 
     @classmethod
-    def get(cls, limit=None, order=None):
-        if limit:
-            return cls.query.limit(limit).all()
-        try:
-            return cls.query.filter(cls.active != 'D').order_by(order).all()
-        except Exception:
-            pass
+    def buildquery(cls, fields, limit, order, filters):
+        if not filters:
+            filters = {}
+        filters.update(active='Y')
+        # filters = check_inputs(**filters)
+        query = cls.query.filter_by(**filters).options(load_only(*fields))
+        if order:
+            return query.order_by(order).limit(limit)
+        return query.limit(limit)
+
+    @classmethod
+    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}):
+        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters)
+        return query.all()
+
 
     @classmethod
     def get_schema(cls, exclude=None):
@@ -150,17 +182,29 @@ class DeclarativeBase(Model):
         instance.update(commit=False, **payload)
         return instance
 
-    def save(self, commit=True):
+    def delete(self):
+        db.session.delete(self)
+        sessioncommit()
+
+    def save(self, _commit=True):
         db.session.add(self)
-        if commit:
-            db.session.commit()
+        if _commit:
+            sessioncommit()
         return self
 
-    def update(self, commit=True, **kwargs):
+    def update(self, _commit=True, **kwargs):
         for attr, value in kwargs.items():
             if attr != 'id':
                 setattr(self, attr, value)
-        return commit and self.save() or self
+        return _commit and self.save() or self
+
+    def commit(self):
+        sessioncommit()
+
+    @classmethod
+    def purge(cls):
+        cls.query.delete()
+        sessioncommit()
 
 
 def create():

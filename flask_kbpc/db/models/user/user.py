@@ -7,8 +7,9 @@ from flask_kbpc.db.flaskalchemy.database import DeclarativeBase
 db = SQLAlchemy()
 
 
-class User(db.Model, DeclarativeBase):
+class BaseUser(DeclarativeBase):
     __tablename__ = 'user'
+    __abstract__ = True
     created = db.Column(db.DateTime())
     username = db.Column(db.String(120), unique=True)
     forename = db.Column(db.String(120))
@@ -17,7 +18,7 @@ class User(db.Model, DeclarativeBase):
     admin = db.Column(db.String(5))
 
     def __init__(self, **kwargs):
-        super(**kwargs)
+        super(BaseUser, self).__init__(**kwargs)
         self.created = datetime.now()
 
     def name(self):
