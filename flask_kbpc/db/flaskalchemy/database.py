@@ -32,7 +32,7 @@ def check_inputs(cls, field, value):
 def sessioncommit():
     try:
         db.session.commit()
-        db.session.close()
+        # db.session.close()
     except Exception as e:
         logger.info(str(e))
         db.session.rollback()
@@ -44,6 +44,27 @@ class DeclarativeBase(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     active = db.Column(db.VARCHAR(2), primary_key=False, default='Y')
 
+    @classmethod
+    def normalise(self, field):
+        """
+        Checks whether filter or field key is an InstumentedAttribute and returns a usable string instead.
+        InstrumentedAttributes are not compatible with queries.
+
+        :param field:
+        :return:
+        """
+
+        if isinstance(field, InstrumentedAttribute):
+            return field.name
+        return field
+
+    @classmethod
+    def checkfilters(cls, filters):
+        resp = {}
+        for k, v in filters.items():
+            resp[cls.normalise(k)] = v
+        return resp
+
 
     @classmethod
     def fields(cls, inc=None, exc=None):
@@ -54,27 +75,28 @@ class DeclarativeBase(db.Model):
 
         normalised_fields = []
         for field in list(key for key in cls.keys() if key not in exc):
-            if isinstance(field, InstrumentedAttribute):
-                normalised_fields.append(field.name)
-            else:
-                normalised_fields.append(field)
-
+            normalised_fields.append(cls.normalise(field))
         return normalised_fields
 
     @classmethod
-    def buildquery(cls, fields, limit, order, filters):
+    def buildquery(cls, fields, limit, order, filters, past):
         if not filters:
             filters = {}
         filters.update(active='Y')
-        # filters = check_inputs(**filters)
+        filters = cls.checkfilters(filters)
+
         query = cls.query.filter_by(**filters).options(load_only(*fields))
+
+        if past is not None:
+            query = cls.query.filter(getattr(cls, past.key)>=datetime.now()).filter_by(**filters).options(load_only(
+                *fields))
         if order:
             return query.order_by(order).limit(limit)
         return query.limit(limit)
 
     @classmethod
-    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}):
-        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters)
+    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True):
+        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past)
         return query.all()
 
 
@@ -97,7 +119,9 @@ class DeclarativeBase(db.Model):
 
     @classmethod
     def getkey(cls, field):
-        return getattr(cls, field).key
+        if isinstance(field, InstrumentedAttribute):
+            return getattr(cls, field.key)
+        return getattr(cls, field)
 
     @classmethod
     def get_one_by_field(cls, field, value):
