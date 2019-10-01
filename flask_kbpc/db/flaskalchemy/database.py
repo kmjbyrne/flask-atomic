@@ -5,6 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import ColumnProperty
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm import load_only
+from sqlalchemy import desc
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from flask_kbpc.logging.logger import get_logger
@@ -36,6 +37,7 @@ def sessioncommit():
     except Exception as e:
         logger.info(str(e))
         db.session.rollback()
+        db.session.close()
         db.session.close()
 
 
@@ -74,12 +76,12 @@ class DeclarativeBase(db.Model):
             exc = []
 
         normalised_fields = []
-        for field in list(key for key in cls.keys() if key not in exc):
+        for field in list(key for key in cls.keys() if key not in [cls.normalise(e) for e in exc]):
             normalised_fields.append(cls.normalise(field))
         return normalised_fields
 
     @classmethod
-    def buildquery(cls, fields, limit, order, filters, past):
+    def buildquery(cls, fields, limit, order, filters, past, **kwargs):
         if not filters:
             filters = {}
         filters.update(active='Y')
@@ -91,12 +93,14 @@ class DeclarativeBase(db.Model):
             query = cls.query.filter(getattr(cls, past.key)>=datetime.now()).filter_by(**filters).options(load_only(
                 *fields))
         if order:
+            if 'descorder' in kwargs:
+                return query.order_by(desc(order)).limit(limit)
             return query.order_by(order).limit(limit)
         return query.limit(limit)
 
     @classmethod
-    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True):
-        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past)
+    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True, **kwargs):
+        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past, **kwargs)
         return query.all()
 
 
@@ -166,10 +170,13 @@ class DeclarativeBase(db.Model):
 
         # First lets map the basic model attributes to key value pairs
         for c in columns:
-            if isinstance(model_dictionary[c], datetime):
-                resp[c] = str(model_dictionary[c])
-            else:
-                resp[c] = model_dictionary[c]
+            try:
+                if isinstance(model_dictionary[c], datetime):
+                    resp[c] = str(model_dictionary[c])
+                else:
+                    resp[c] = model_dictionary[c]
+            except KeyError:
+                pass
         if rel is False or not mapped_relationships:
             return resp
 
@@ -229,6 +236,9 @@ class DeclarativeBase(db.Model):
     def purge(cls):
         cls.query.delete()
         sessioncommit()
+
+    def close(self):
+        db.session.close()
 
 
 def create():
