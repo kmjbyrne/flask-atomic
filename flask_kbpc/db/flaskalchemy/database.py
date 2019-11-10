@@ -1,11 +1,13 @@
 from datetime import datetime
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import desc
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import ColumnProperty
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm import load_only
-from sqlalchemy import desc
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from flask_kbpc.logging.logger import get_logger
@@ -33,12 +35,17 @@ def check_inputs(cls, field, value):
 def sessioncommit():
     try:
         db.session.commit()
-        # db.session.close()
-    except Exception as e:
-        logger.info(str(e))
+    except OperationalError as operror:
+        logger.info(str(operror))
         db.session.rollback()
         db.session.close()
         db.session.close()
+    except IntegrityError as integerror:
+        raise integerror
+    except Exception as error:
+        raise error
+    finally:
+        logger.info(str('DB execution cycle complete'))
 
 
 class DeclarativeBase(db.Model):
@@ -47,7 +54,7 @@ class DeclarativeBase(db.Model):
     active = db.Column(db.VARCHAR(2), primary_key=False, default='Y')
 
     @classmethod
-    def normalise(self, field):
+    def normalise(cls, field):
         """
         Checks whether filter or field key is an InstumentedAttribute and returns a usable string instead.
         InstrumentedAttributes are not compatible with queries.
@@ -66,7 +73,6 @@ class DeclarativeBase(db.Model):
         for k, v in filters.items():
             resp[cls.normalise(k)] = v
         return resp
-
 
     @classmethod
     def fields(cls, inc=None, exc=None):
@@ -90,7 +96,7 @@ class DeclarativeBase(db.Model):
         query = cls.query.filter_by(**filters).options(load_only(*fields))
 
         if past is not None:
-            query = cls.query.filter(getattr(cls, past.key)>=datetime.now()).filter_by(**filters).options(load_only(
+            query = cls.query.filter(getattr(cls, past.key) >= datetime.now()).filter_by(**filters).options(load_only(
                 *fields))
         if order:
             if 'descorder' in kwargs:
@@ -100,9 +106,13 @@ class DeclarativeBase(db.Model):
 
     @classmethod
     def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True, **kwargs):
-        query  = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past, **kwargs)
+        query = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past, **kwargs)
+        try:
+            return query.all()
+        except Exception as e:
+            logger.error(str(e))
+            db.session.rollback()
         return query.all()
-
 
     @classmethod
     def get_schema(cls, exclude=None):

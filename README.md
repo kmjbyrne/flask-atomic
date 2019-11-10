@@ -61,7 +61,7 @@ json = jsonify(data=model)
 # This however is serializable immediately
 json = jsonify(data=transformed_model)
 ```
-
+---
 
 Often, fields like passwords or other sensitive data should be hidden from responses or outputs. Usually this would be 
 managed at the model class, and writing a to_dict() function or something similar, and simply not declaring the 
