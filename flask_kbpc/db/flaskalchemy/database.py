@@ -100,19 +100,28 @@ class DeclarativeBase(db.Model):
                 *fields))
         if order:
             if 'descorder' in kwargs:
-                return query.order_by(desc(order)).limit(limit)
-            return query.order_by(order).limit(limit)
-        return query.limit(limit)
+                return query.order_by(desc(order)).limit(limit).options(load_only(*fields))
+            return query.order_by(order).limit(limit).options(load_only(*fields))
+        return query.limit(limit).options(load_only(*fields))
 
     @classmethod
     def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True, **kwargs):
         query = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past, **kwargs)
         try:
-            return query.all()
+            return query
         except Exception as e:
             logger.error(str(e))
             db.session.rollback()
-        return query.all()
+        return query
+
+    @classmethod
+    def makequery(cls):
+        try:
+            return cls.query
+        except Exception as e:
+            logger.error(str(e))
+            db.session.rollback()
+        return cls.query
 
     @classmethod
     def get_schema(cls, exclude=None):
@@ -157,6 +166,7 @@ class DeclarativeBase(db.Model):
         This utility function dynamically converts Alchemy model classes into a dict using introspective lookups.
         This saves on manually mapping each model and all the fields. However, exclusions should be noted.
         Such as passwords and protected properties.
+
         :param json: boolean for whether to return JSON or model instance format data
         :param rel: Whether or not to introspect to FK's
         :param exc: Fields to exclude from query result set
@@ -187,8 +197,14 @@ class DeclarativeBase(db.Model):
                     resp[c] = model_dictionary[c]
             except KeyError:
                 pass
+
         if rel is False or not mapped_relationships:
             return resp
+
+        if rel is True:
+            mapped_relationships = mapped_relationships
+        elif len(rel):
+            mapped_relationships = map(lambda item: item.key, rel)
 
         # Now map the relationships
         for r in mapped_relationships:
@@ -227,6 +243,16 @@ class DeclarativeBase(db.Model):
         db.session.delete(self)
         sessioncommit()
 
+    def sdelete(self, _commit=True):
+        self.active = 'D'
+        sessioncommit()
+        return _commit and self.save() or self
+
+    def restore(self, _commit=True):
+        self.active = 'Y'
+        sessioncommit()
+        return _commit and self.save() or self
+
     def save(self, _commit=True):
         db.session.add(self)
         if _commit:
@@ -235,7 +261,7 @@ class DeclarativeBase(db.Model):
 
     def update(self, _commit=True, **kwargs):
         for attr, value in kwargs.items():
-            if attr != 'id':
+            if attr != 'id' and attr in self.fields():
                 setattr(self, attr, value)
         return _commit and self.save() or self
 
