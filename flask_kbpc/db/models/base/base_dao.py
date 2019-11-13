@@ -1,7 +1,7 @@
 import sqlalchemy
 
 from flask_kbpc.db.flaskalchemy.database import DeclarativeBase
-from flask_kbpc.http.utils.exceptions import HTTPException
+from flask_kbpc.http.exceptions import HTTPException
 
 
 class BaseDAO:

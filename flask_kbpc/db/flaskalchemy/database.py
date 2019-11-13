@@ -87,34 +87,6 @@ class DeclarativeBase(db.Model):
         return normalised_fields
 
     @classmethod
-    def buildquery(cls, fields, limit, order, filters, past, **kwargs):
-        if not filters:
-            filters = {}
-        filters.update(active='Y')
-        filters = cls.checkfilters(filters)
-
-        query = cls.query.filter_by(**filters).options(load_only(*fields))
-
-        if past is not None:
-            query = cls.query.filter(getattr(cls, past.key) >= datetime.now()).filter_by(**filters).options(load_only(
-                *fields))
-        if order:
-            if 'descorder' in kwargs:
-                return query.order_by(desc(order)).limit(limit).options(load_only(*fields))
-            return query.order_by(order).limit(limit).options(load_only(*fields))
-        return query.limit(limit).options(load_only(*fields))
-
-    @classmethod
-    def get(cls, inc=None, exc=None, limit=None, order=None, filters={}, past=True, **kwargs):
-        query = cls.buildquery(cls.fields(inc, exc), limit, order, filters, past, **kwargs)
-        try:
-            return query
-        except Exception as e:
-            logger.error(str(e))
-            db.session.rollback()
-        return query
-
-    @classmethod
     def makequery(cls):
         try:
             return cls.query
@@ -145,17 +117,6 @@ class DeclarativeBase(db.Model):
         if isinstance(field, InstrumentedAttribute):
             return getattr(cls, field.key)
         return getattr(cls, field)
-
-    @classmethod
-    def get_one_by_field(cls, field, value):
-        lookup = check_inputs(cls, field, value)
-
-        return cls.query.filter_by(**lookup).first()
-
-    @classmethod
-    def get_all_by_field(cls, field, value, limit=None):
-        lookup = check_inputs(cls, field, value)
-        return cls.query.filter_by(**lookup).all()
 
     def columns(self):
         return [prop.key for prop in class_mapper(self.__class__).iterate_properties if

@@ -1,11 +1,10 @@
 import base64
 from datetime import datetime
 from datetime import timedelta
-from functools import wraps
 
 import jwt
-from flask import g
-from flask import jsonify
+
+from flask import request
 
 
 def encode_auth_token(user_id, secret_key, expiry=12, algorithm='HS256'):
@@ -38,17 +37,12 @@ def decode_auth_token(auth_token, secret_key):
 
 
 def confirm_token(token):
-    token = base64.standard_b64decode(token).decode('utf-8')
-    return decode_auth_token(token)
-
-
-def check_request_token(func):
-    @wraps(func)
-    def decorated(*args, **kwargs):
-        auth_token = confirm_token()
-        if type(auth_token) == str:
-            return jsonify(message='Token is invalid', code=403), 403
-        g.user = auth_token.get('user')
-        return func(*args, **kwargs)
-
-    return decorated
+    # token = base64.standard_b64decode(token).decode('utf-8')
+    # return decode_auth_token(token)
+    try:
+        if not token:
+            token = request.headers.environ.get('HTTP_API_AUTHORIZATION')
+        decoded = decode_auth_token(token)
+    except Exception as error:
+        return None
+    return decoded
