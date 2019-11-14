@@ -3,7 +3,7 @@ import sqlalchemy
 from sqlalchemy import exc
 from sqlalchemy.orm import load_only
 
-from flask_kbpc.dao.data import DataBuffer
+from flask_electron.dao.data import DataBuffer
 
 
 class QueryBuffer:

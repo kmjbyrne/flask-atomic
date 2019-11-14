@@ -10,7 +10,7 @@ from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm import load_only
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-from flask_kbpc.logging.logger import get_logger
+from flask_electron.logging.logger import get_logger
 
 Base = declarative_base()
 

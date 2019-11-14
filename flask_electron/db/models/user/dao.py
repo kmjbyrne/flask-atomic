@@ -2,9 +2,9 @@ from flask import jsonify
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
-from flask_kbpc.common.exceptions import MissingConfigurationValue
-from flask_kbpc.db.models.base.base_dao import BaseDAO
-from flask_kbpc.db.models.user.user import BaseUser
+from flask_electron.common.exceptions import MissingConfigurationValue
+from flask_electron.db.models.base.base_dao import BaseDAO
+from flask_electron.db.models.user.user import BaseUser
 
 PASSWORD_MIN = 8
 

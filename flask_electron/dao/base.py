@@ -5,10 +5,10 @@ from urllib import parse
 
 import sqlalchemy
 
-from flask_kbpc.db.flaskalchemy.database import DeclarativeBase
-from flask_kbpc.dao.actions import ActionsModel
-from flask_kbpc.dao.query import QueryBuffer
-from flask_kbpc.http.exceptions import HTTPException
+from flask_electron.db.flaskalchemy.database import DeclarativeBase
+from flask_electron.dao.actions import ActionsModel
+from flask_electron.dao.query import QueryBuffer
+from flask_electron.http.exceptions import HTTPException
 
 
 class BaseDAO:

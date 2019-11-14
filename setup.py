@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='Flask-KBPC',
+    name='Flask-Electron',
     version='0.4.3',
     description='Reusable Python code for projects',
     long_description=long_description,

@@ -2,7 +2,7 @@ from functools import wraps
 
 from flask import jsonify
 
-from flask_kbpc.auth.jwt import confirm_token
+from flask_electron.auth.jwt import confirm_token
 
 
 def check_request_token(func):
