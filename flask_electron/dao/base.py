@@ -1,13 +1,12 @@
 import copy
-
 from datetime import datetime
-from urllib import parse
 
 import sqlalchemy
 
-from flask_electron.db.flaskalchemy.database import DeclarativeBase
 from flask_electron.dao.actions import ActionsModel
+from flask_electron.dao.data import DataBuffer
 from flask_electron.dao.query import QueryBuffer
+from flask_electron.db.flaskalchemy.database import DeclarativeBase
 from flask_electron.http.exceptions import HTTPException
 
 
@@ -33,18 +32,16 @@ class BaseDAO:
             exclude = []
         return self.model.get_schema(exclude=self.exclusions + exclude)
 
-    def __querystring(self, query_string):
-        args = parse.parse_qs(query_string.decode('utf-8'), encoding='utf-8')
+    def __querystring(self, querystring):
         fields = []
-        for key, value in args.items():
+        for key, value in querystring.items():
             if value[0] == 'false':
                 fields.append(key)
         self.exclusions = [i for i in list(fields)]
 
-        rels = args.get('relationships', None)
+        rels = querystring.get('relationships', None)
         if rels:
-            if rels[0] == 'true':
-                self.relationships = True
+            self.relationships = rels not in ['false', 'N', 'no', 'No', '0']
         return self.exclusions
 
     @classmethod
@@ -59,6 +56,7 @@ class BaseDAO:
         for item in payload:
             if item not in valid_fields:
                 invalid_fields.append(item)
+                valid = False
 
         if valid is False:
             raise ValueError('<{}> not accepted as input field(s)'.format(', '.join(invalid_fields)))
@@ -70,10 +68,10 @@ class BaseDAO:
 
     def __buffer(self, flagged=False):
         query = self.model.makequery()
-        return QueryBuffer(query, self.model, view_flagged=flagged)
+        return QueryBuffer(query, self.model, view_flagged=flagged, rel=self.relationships)
 
     def query(self, flagged=False):
-        return QueryBuffer(self.__query(), self.model, view_flagged=flagged)
+        return QueryBuffer(self.__query(), self.model, view_flagged=flagged, rel=self.relationships)
 
     def delete(self, instanceid):
         instance = self.get_one(instanceid).view()
@@ -114,9 +112,10 @@ class BaseDAO:
     def create(self, payload):
         self.validate_arguments(payload)
         try:
+            payload['created'] = datetime.now()
             instance = self.model.create(**payload)
-            instance.save()
-            return instance
+            self.save(instance)
+            return DataBuffer(instance, instance.get_schema(), None)
         except sqlalchemy.exc.IntegrityError as error:
             model = str(self.model.__tablename__).capitalize()
             errorfield = ''
@@ -134,7 +133,8 @@ class BaseDAO:
 
     def save(self, instance):
         try:
-            instance.save()
+            instance.save(_commit=True)
+            return instance
         except sqlalchemy.exc.IntegrityError:
             raise HTTPException('Entity with part or all of these details already exists', code=409)
 
@@ -156,7 +156,9 @@ class BaseDAO:
         :return: instance copy with new D flag
         """
 
-        instance = self.get_one(instance_id).view()
+        instance = self.get_one(instance_id, flagged=True).view()
+        if instance is None or instance.active == 'D':
+            raise ValueError('This entry does not exist or maybe have been marked for deletion.')
         instance.active = 'D'
         instance.save()
         return instance

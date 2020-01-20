@@ -1,6 +1,4 @@
 import sqlalchemy
-
-from sqlalchemy import exc
 from sqlalchemy.orm import load_only
 
 from flask_electron.dao.data import DataBuffer
@@ -8,11 +6,12 @@ from flask_electron.dao.data import DataBuffer
 
 class QueryBuffer:
 
-    def __init__(self, query, model, view_flagged=False):
+    def __init__(self, query, model, rel=True, view_flagged=False):
         self.query = query
         self.model = model
         self._ordered = False
         self.fields = []
+        self.rel = rel
         self.filters = None
         self.exclusions = []
         self.view_flagged = view_flagged
@@ -72,16 +71,16 @@ class QueryBuffer:
     def marshall(self, query, schema, fields):
         if not fields:
             fields = self.model.fields()
-        return DataBuffer(query, self.filter_schema(schema, fields), self.exclusions)
+        return DataBuffer(query, self.filter_schema(schema, fields), self.rel, self.exclusions)
 
     def exec(self, query):
         try:
             return query()
         except Exception as e:
-            pass
+            raise e
             # db.session.rollback()
         except sqlalchemy.orm.exc.NoResultFound as e:
-            return False
+            raise ValueError('Resource does not exist')
 
     def show_soft_deletes(self):
         self.view_flagged = True

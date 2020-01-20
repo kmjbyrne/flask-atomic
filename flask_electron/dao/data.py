@@ -1,14 +1,14 @@
-
 class DataBuffer:
 
-    def __init__(self, data, schema, exclusions):
+    def __init__(self, data, schema, rel, exclusions=None):
         self.object = True
-        self.relationships = True
+        self.relationships = None
+        self.showrefs(rel)
         if isinstance(data, list):
             self.object = False
         self.schema = schema
         self.data = data
-        self.exclusions = exclusions
+        self.exclusions = exclusions or list()
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
 
     def showrefs(self, value=True):
