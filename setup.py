@@ -15,7 +15,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='Flask-Electron',
-    version='0.4.4',
+    version='0.4.5',
     description='Core code for Flask based projects',
     long_description=long_description,
     long_description_content_type="text/markdown",
