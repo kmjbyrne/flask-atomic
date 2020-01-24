@@ -8,6 +8,7 @@ from flask_electron.db.flaskalchemy import serializer
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
@@ -87,6 +88,14 @@ class TestTransform(unittest.TestCase):
         response = serializer.merge_column_sets(base_set, difference_set)
         expected = {1, 2, 5}
         self.assertEqual(response, expected)
+
+    def test_merge_column_sets_fail_with_non_iter_type(self):
+        base_set = 'non iter type'
+
+        with self.assertRaises(TypeError):
+            serializer.merge_column_sets(base_set, base_set)
+            serializer.merge_column_sets(0, 1)
+            serializer.merge_column_sets(lambda: True, lambda: True)
 
     def test_unpack(self):
         response = serializer.serialize(self.fixed_instance)

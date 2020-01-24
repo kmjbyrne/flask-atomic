@@ -1,8 +1,8 @@
 class DataBuffer:
 
-    def __init__(self, data, schema, rel, exclusions=None):
+    def __init__(self, data, schema, rel=True, exclusions=None):
         self.object = True
-        self.relationships = None
+        self.relationships = rel
         self.showrefs(rel)
         if isinstance(data, list):
             self.object = False
@@ -10,6 +10,9 @@ class DataBuffer:
         self.data = data
         self.exclusions = exclusions or list()
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
+
+    def name(self):
+        return self.data.__repr__()
 
     def showrefs(self, value=True):
         """
@@ -22,7 +25,7 @@ class DataBuffer:
         self.relationships = value
         return self
 
-    def _instance_prep(self, instance, exclude):
+    def __instance_prep(self, instance, exclude):
         if not exclude:
             exclude = []
         return instance.prepare(
@@ -37,9 +40,13 @@ class DataBuffer:
             raise ValueError('Cannot use exclusions that are not in a collection')
 
         exclude = exclude + self.exclusions
+
+        if self.data is None:
+            return list()
+
         if self.object:
-            return self._instance_prep(self.data, exclude)
-        return [self._instance_prep(entry, exclude) for entry in self.data]
+            return self.__instance_prep(self.data, exclude)
+        return [self.__instance_prep(entry, exclude) for entry in self.data]
 
     def view(self):
         return self.data

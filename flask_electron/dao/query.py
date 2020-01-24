@@ -6,9 +6,10 @@ from flask_electron.dao.data import DataBuffer
 
 class QueryBuffer:
 
-    def __init__(self, query, model, rel=True, view_flagged=False):
+    def __init__(self, query, model, rel=True, view_flagged=False, dao=None):
         self.query = query
         self.model = model
+        self.dao = dao
         self._ordered = False
         self.fields = []
         self.rel = rel
@@ -61,7 +62,8 @@ class QueryBuffer:
             order = field
             self._ordered = True
         if descending:
-            order.desc()
+            self.query = self.query.order_by(getattr(self.model, order).desc())
+            return self
         self.query = self.query.order_by(order)
         return self
 
@@ -73,7 +75,7 @@ class QueryBuffer:
             fields = self.model.fields()
         return DataBuffer(query, self.filter_schema(schema, fields), self.rel, self.exclusions)
 
-    def exec(self, query):
+    def execute(self, query):
         try:
             return query()
         except Exception as e:
@@ -91,21 +93,20 @@ class QueryBuffer:
             filters = {}
             filters.update(active='Y')
             self.filters = filters
-        if self.view_flagged:
-            if self.filters.get('active', None):
-                del self.filters['active']
+        if self.view_flagged and self.filters.get('active', None):
+            del self.filters['active']
         self.query = self.query.filter_by(**self.filters)
 
     def all(self):
-        resp = self.exec(self.query.all)
+        resp = self.execute(self.query.all)
         return self.marshall(resp, self.model.get_schema(), self.fields)
 
     def one(self):
-        resp = self.exec(self.query.one)
+        resp = self.execute(self.query.one)
         return self.marshall(resp, self.model.get_schema(), self.fields)
 
     def first(self):
-        resp = self.exec(self.query.first)
+        resp = self.execute(self.query.first)
         return self.marshall(resp, self.model.get_schema(), self.fields)
 
     def __iter__(self):

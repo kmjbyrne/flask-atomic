@@ -2,7 +2,7 @@ from datetime import datetime
 
 from flask_sqlalchemy import SQLAlchemy
 
-from flask_electron.db.flaskalchemy.database import DeclarativeBase
+from flask_electron.sqlalchemy.declarative import DeclarativeBase
 
 db = SQLAlchemy()
 

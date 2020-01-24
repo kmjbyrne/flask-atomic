@@ -1,26 +1,33 @@
 import copy
+
 from datetime import datetime
 
 import sqlalchemy
 
-from flask_electron.dao.actions import ActionsModel
 from flask_electron.dao.data import DataBuffer
+from flask_electron.dao.actions import ActionsModel
 from flask_electron.dao.query import QueryBuffer
-from flask_electron.db.flaskalchemy.database import DeclarativeBase
 from flask_electron.http.exceptions import HTTPException
+
+
+class QueryArgs:
+    reverse = False
 
 
 class BaseDAO:
     json = True
-    model = DeclarativeBase
+    model = None
     working_instance = object
     exclusions = []
-    relationships = False
-    sortkey = None
-    querystring = None
+    relationships = True
+    sortkey = 'id'
+    queryargs = QueryArgs()
+    querystring = None  # TODO Break out this code to a class and encapsulate mapping a little better
     _actions = ActionsModel
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, model, *args, **kwargs):
+        setattr(self.queryargs, 'reverse', False)
+        self.model = model
         if kwargs.get('querystring'):
             self.__querystring(kwargs.get('querystring'))
 
@@ -30,7 +37,7 @@ class BaseDAO:
     def schema(self, exclude=None):
         if not exclude:
             exclude = []
-        return self.model.get_schema(exclude=self.exclusions + exclude)
+        return self.model.schema(exclude=self.exclusions + exclude, rel=self.relationships)
 
     def __querystring(self, querystring):
         fields = []
@@ -39,9 +46,16 @@ class BaseDAO:
                 fields.append(key)
         self.exclusions = [i for i in list(fields)]
 
-        rels = querystring.get('relationships', None)
+        rels = querystring.get('relationships', True)
         if rels:
             self.relationships = rels not in ['false', 'N', 'no', 'No', '0']
+
+        order = querystring.get('order_by', False)
+        if order:
+            if order not in self.model.keys():
+                raise ValueError('This field is not a recognised sort field.')
+            self.sortkey = order
+
         return self.exclusions
 
     @classmethod
@@ -68,10 +82,12 @@ class BaseDAO:
 
     def __buffer(self, flagged=False):
         query = self.model.makequery()
-        return QueryBuffer(query, self.model, view_flagged=flagged, rel=self.relationships)
+        return QueryBuffer(query, self.model, view_flagged=flagged, rel=self.relationships, dao=self)
 
     def query(self, flagged=False):
-        return QueryBuffer(self.__query(), self.model, view_flagged=flagged, rel=self.relationships)
+        buffer = QueryBuffer(self.__query(), self.model, view_flagged=flagged, rel=self.relationships, dao=self)
+        buffer.order_by(self.sortkey, self.queryargs.reverse)
+        return buffer
 
     def delete(self, instanceid):
         instance = self.get_one(instanceid).view()
@@ -114,8 +130,7 @@ class BaseDAO:
         try:
             payload['created'] = datetime.now()
             instance = self.model.create(**payload)
-            self.save(instance)
-            return DataBuffer(instance, instance.get_schema(), None)
+            return DataBuffer(self.save(instance), instance.get_schema(), None)
         except sqlalchemy.exc.IntegrityError as error:
             model = str(self.model.__tablename__).capitalize()
             errorfield = ''

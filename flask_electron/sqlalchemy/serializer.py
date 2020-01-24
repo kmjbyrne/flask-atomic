@@ -1,4 +1,30 @@
-def get_columns(instance) -> set:
+from collections import Iterable
+
+from flask_electron.sqlalchemy.declarative import DeclarativeBase
+
+
+# defining a decorator
+def iterators_only(func):
+    # inner1 is a Wrapper function in
+    # which the argument is called
+
+    # inner function can access the outer local
+    # functions like in this case "func"
+    def check(*args, **kwargs):
+        def invalid_type(arg):
+            if not iter(arg):
+                return True
+            if type(arg) == str:
+                return True
+            return False
+
+        if any([invalid_type(param) for param in args]):
+            raise TypeError('Library requires exclusions to be a iterable object, excluding strings.')
+        return func(*args, **kwargs)
+    return check
+
+
+def get_columns(instance: DeclarativeBase) -> set:
     """
     Pulls all the column keys from an instance
     :param instance: model instance
@@ -9,7 +35,8 @@ def get_columns(instance) -> set:
     return set([col for col in instance.__mapper__.columns.keys()])
 
 
-def merge_column_sets(columns: set, exclusions: set) -> set:
+@iterators_only
+def merge_column_sets(columns: Iterable, exclusions: Iterable) -> set:
     """
     Take the column set and subtract the exclusions.
     :param columns: set of columns on the instance
@@ -18,19 +45,15 @@ def merge_column_sets(columns: set, exclusions: set) -> set:
     :rtype: set
     """
 
-    exclusion_instance = type(exclusions)
-    approved_types = [type([]), type(set()), type(())]
-    print(exclusion_instance)
-    if exclusion_instance not in approved_types:
-        raise ValueError('Library requires exclusions to be a iterable object (Supporting: list, tuple or set)')
-
     return columns.difference(exclusions)
 
 
-def convert(instance, exclusions=None) -> dict:
+def convert(instance: DeclarativeBase, exclusions=None) -> dict:
     """
     Extracts a dictionary representation of a SQLAlchemy model instance
+    :type instance: DeclarativeBase
     :param instance: raw SQLAlchemy model instance
+
     :param exclusions: list of columns to be excluded
     :return: dictionary representation of a model
     :rtype: dict
@@ -78,11 +101,11 @@ def serialize(instance: {}, exclusions=None, include_relationship=False) -> dict
     return model
 
 
-def get_tablename(instance: dict) -> str:
+def get_tablename(instance: DeclarativeBase) -> str:
     return instance.__tablename__
 
 
-def get_relationship_keys(instance: dict) -> list:
+def get_relationship_keys(instance: DeclarativeBase) -> list:
     """
     Pulls relationship keys from model instance. Assumes FlaskAlchemy code uses __mapper__. This has to be exposed
     in order to effectively pull out the relationship keys bound to the instance.

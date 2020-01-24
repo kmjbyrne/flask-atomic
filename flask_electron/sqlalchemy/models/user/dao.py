@@ -3,8 +3,8 @@ from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
 from flask_electron.common.exceptions import MissingConfigurationValue
-from flask_electron.db.models.base.base_dao import BaseDAO
-from flask_electron.db.models.user.user import BaseUser
+from flask_electron.dao.base import BaseDAO
+from flask_electron.sqlalchemy.models.user.user import BaseUser
 
 PASSWORD_MIN = 8
 
@@ -13,6 +13,7 @@ class UserDAO(BaseDAO):
     json = False
 
     def __init__(self, model=BaseUser):
+        super().__init__(model)
         self.user = None
         self.model = model
 
@@ -20,9 +21,6 @@ class UserDAO(BaseDAO):
         self.model = instance
         instance.password = self.encrypt_user_password(instance.password)
         super().save(instance)
-
-    def get(self, **kwargs):
-        return super().get(exc=[self.model.password.name], **kwargs)
 
     def validate(self, username, password):
         if len(username) < 3:
@@ -75,6 +73,7 @@ class UserDAO(BaseDAO):
         if config.get('SECRET_KEY') is None:
             raise MissingConfigurationValue('SECRET_KEY')
 
+        self.model.password = generate_password_hash(password)
         return generate_password_hash(password)
 
     def check_user_password(self, password):

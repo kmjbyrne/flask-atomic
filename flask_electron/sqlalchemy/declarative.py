@@ -1,22 +1,16 @@
+from collections import Iterable
 from datetime import datetime
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import ColumnProperty
-from sqlalchemy.orm import class_mapper
-from sqlalchemy.orm import load_only
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-from flask_electron.logging.logger import get_logger
-
-Base = declarative_base()
+from flask_electron.logger import get_logger
 
 db = SQLAlchemy()
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 def check_inputs(cls, field, value):
@@ -35,6 +29,8 @@ def check_inputs(cls, field, value):
 def sessioncommit():
     try:
         db.session.commit()
+        # db.session.close()
+        return
     except OperationalError as operror:
         logger.info(str(operror))
         db.session.rollback()
@@ -43,12 +39,29 @@ def sessioncommit():
     except IntegrityError as integerror:
         raise integerror
     except Exception as error:
-        raise error
+        raise Exception
     finally:
         logger.info(str('DB execution cycle complete'))
 
 
 class DeclarativeBase(db.Model):
+    """
+    Base model to be extended for use with Flask projects.
+
+    Core concept of the model is common functions to help wrap up database
+    interaction into a single interface. Testing can be rolled up easier this
+    way also. Inheriting from this class automatically sets id field and db
+    soft deletion field managed by active using the DYNA pattern (D, Y, N, A).
+
+    Basic usage::
+
+        from flask_electron.db.flaskalchemy.database import DeclarativeBase
+
+        class MyNewModel(DeclarativeBase):
+            field_a = db.Column(db.String(256), nullable=True)
+
+    """
+
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     active = db.Column(db.VARCHAR(2), primary_key=False, default='Y')
@@ -96,21 +109,22 @@ class DeclarativeBase(db.Model):
         return cls.query
 
     @classmethod
-    def get_schema(cls, exclude=None):
+    def schema(cls, rel=True, exclude=None):
         if exclude is None:
             exclude = []
         schema = []
-        for item in [key for key in list(cls.__table__.columns.keys()) if key not in exclude]:
-            schema.append(
-                dict(name=item.replace('_', ' '), key=item)
-            )
+        for item in [key for key in cls.keys(rel=rel) if key not in exclude]:
+            schema.append(dict(name=item.replace('_', ' '), key=item))
         return schema
 
     @classmethod
-    def keys(cls):
+    def keys(cls, rel=True):
         all_keys = set(cls.__table__.columns.keys())
         relations = set(cls.__mapper__.relationships.keys())
-        return all_keys - relations
+
+        if not rel:
+            return all_keys.difference(relations)
+        return all_keys.union(relations)
 
     @classmethod
     def getkey(cls, field):
@@ -118,67 +132,68 @@ class DeclarativeBase(db.Model):
             return getattr(cls, field.key)
         return getattr(cls, field)
 
-    def columns(self):
-        return [prop.key for prop in class_mapper(self.__class__).iterate_properties if
-                isinstance(prop, ColumnProperty)]
+    def relationships(self, root=''):
+        return list(filter(lambda r: r != root, self.__mapper__.relationships.keys()))
 
-    def prepare(self, rel=False, json=True, exc=None):
+    def columns(self, exc):
+        return [key for key in list(self.__table__.columns.keys()) if key not in exc]
+
+    def whatami(self):
+        return self.__tablename__
+
+    def process_relationships(self, root: str, exc: list = None):
+        resp = dict()
+        for item in self.relationships(root):
+            relationship_instance = getattr(self, item)
+            if isinstance(relationship_instance, list):
+                resp[item] = [i.extract_data(exc) for i in relationship_instance]
+                for index, entry in enumerate(relationship_instance):
+                    for grandchild in entry.relationships(root):
+                        print(grandchild)
+                        resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(())
+            elif relationship_instance:
+                resp[item] = relationship_instance.extract_data(exc)
+        return resp
+
+    def extract_data(self, exc: Iterable = None) -> dict:
+        resp = dict()
+        if exc is None:
+            exc = Iterable()
+        for column in self.columns(exc):
+            if isinstance(getattr(self, column), datetime):
+                resp[column] = str(getattr(self, column))
+            else:
+                resp[column] = getattr(self, column)
+        return resp
+
+    def prepare(self, rel=True, exc=None, root=None):
         """
         This utility function dynamically converts Alchemy model classes into a dict using introspective lookups.
         This saves on manually mapping each model and all the fields. However, exclusions should be noted.
         Such as passwords and protected properties.
 
-        :param json: boolean for whether to return JSON or model instance format data
         :param rel: Whether or not to introspect to FK's
         :param exc: Fields to exclude from query result set
+        :param root: Root model for processing relationships
+
         :return: json data structure of model
         :rtype: dict
         """
+
+        if root is None:
+            root = self.whatami()
 
         if exc is None:
             exc = ['password']
         else:
             exc.append('password')
 
-        if not json:
-            return self
-
         # Define our model properties here. Columns and Schema relationships
-        columns = [col for col in self.__mapper__.columns.keys() if col not in exc]
-        mapped_relationships = self.__mapper__.relationships.keys()
-        model_dictionary = self.__dict__
-        resp = {}
-
-        # First lets map the basic model attributes to key value pairs
-        for c in columns:
-            try:
-                if isinstance(model_dictionary[c], datetime):
-                    resp[c] = str(model_dictionary[c])
-                else:
-                    resp[c] = model_dictionary[c]
-            except KeyError:
-                pass
-
-        if rel is False or not mapped_relationships:
+        resp = self.extract_data(exc)
+        if not rel:
             return resp
 
-        if rel is True:
-            mapped_relationships = mapped_relationships
-        elif len(rel):
-            mapped_relationships = map(lambda item: item.key, rel)
-
-        # Now map the relationships
-        for r in mapped_relationships:
-            try:
-                if isinstance(getattr(self, r), list):
-                    resp[r] = [
-                        i.prepare(rel=False, exc=exc) for i in getattr(self, r)
-                    ]
-                else:
-                    resp[r] = getattr(self, r).prepare(rel=False, exc=exc)
-
-            except Exception as error:
-                pass
+        resp.update(self.process_relationships(root, exc=exc))
         return resp
 
     def __eq__(self, comparison):
@@ -197,8 +212,7 @@ class DeclarativeBase(db.Model):
     @classmethod
     def create(cls, **payload):
         instance = cls()
-        instance.update(commit=False, **payload)
-        return instance
+        return instance.update(commit=True, **payload)
 
     def delete(self):
         db.session.delete(self)
@@ -218,21 +232,23 @@ class DeclarativeBase(db.Model):
         db.session.add(self)
         if _commit:
             sessioncommit()
+        db.session.refresh(self)
         return self
 
     def update(self, _commit=True, **kwargs):
         for attr, value in kwargs.items():
             if attr != 'id' and attr in self.fields():
                 setattr(self, attr, value)
-        return _commit and self.save() or self
+        # return _commit and self.save() or self
+        return self
 
     def commit(self):
-        sessioncommit()
+        return sessioncommit()
 
     @classmethod
     def purge(cls):
         cls.query.delete()
-        sessioncommit()
+        return sessioncommit()
 
     def close(self):
         db.session.close()

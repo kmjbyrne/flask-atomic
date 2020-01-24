@@ -6,8 +6,8 @@ with open("README.md", "r") as fh:
 
 setup(
     name='Flask-Electron',
-    version='0.4.3',
-    description='Reusable Python code for projects',
+    version='0.4.4',
+    description='Core code for Flask based projects',
     long_description=long_description,
     long_description_content_type="text/markdown",
     classifiers=[
@@ -16,7 +16,7 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     keywords='python library utilities',
-    url='https://github.com/kmjbyrne/flask-kbpc',
+    url='https://github.com/kmjbyrne/flask-electron',
     author='Keith Byrne',
     author_email='keithmbyrne@gmail.com',
     license='MIT',
