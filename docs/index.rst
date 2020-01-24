@@ -13,7 +13,7 @@ Welcome to Flask Electron's documentation!
 Secondary Heading
 +++++++++++++++++
 
-.. automodule:: flask_electron.db.flaskalchemy.database
+.. automodule:: flask_electron.sqlalchemy.declarative
     :members:
 
 
