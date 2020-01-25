@@ -1,6 +1,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 theme: jekyll-theme-slate
+<<<<<<< HEAD
 title: Flask Electron
 =======
 theme: jekyll-theme-slate
@@ -9,3 +10,6 @@ theme: jekyll-theme-slate
 theme: jekyll-theme-slate
 title: "Flask Electron"
 >>>>>>> 3921706... github pages content
+=======
+title: Flask Electron
+>>>>>>> 4548c92... github pages content
