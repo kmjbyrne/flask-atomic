@@ -1,3 +1,7 @@
+---
+layout: default
+---
+
 # Flask Electron GitHub Pages
 
 ## Introduction
