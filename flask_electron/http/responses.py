@@ -3,7 +3,7 @@ import json
 
 from flask import Response
 
-from flask_electron.db.flaskalchemy.database import DeclarativeBase
+from flask_electron.sqlalchemy.declarative import DeclarativeBase
 
 
 def checktype(data):

@@ -1,6 +1,7 @@
-from flask import jsonify
 from flask import Blueprint
+from flask import jsonify
 from flask import request
+
 from flask_electron.dao.base import BaseDAO
 from flask_electron.http.responses import JsonOKResponse
 from flask_electron.logger import get_logger
@@ -8,23 +9,26 @@ from flask_electron.logger import get_logger
 logger = get_logger(__name__)
 
 
+def default_decorator(func):
+    def __dec(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return __dec
+
+
 class CoreBlueprint(Blueprint):
 
     def __init__(self, name, module, dao=None, model=None, decorator=None):
+        if model is None:
+            raise AttributeError('Core blueprint requires a model instance. Please use Flask Blueprint otherwise.')
+
         if dao is None:
-            self.dao = BaseDAO
-            self.dao.model = model
+            dao = BaseDAO
+            dao.model = model
 
         if decorator is None:
-            def _dec(func):
-                def __dec(*args, **kwargs):
-                    return func(*args, **kwargs)
+            self.decorator = default_decorator
 
-                return __dec
-
-            decorator = _dec
-
-        self.decorator = decorator
         self.dao = dao
         self.model = model
         super().__init__(name, module)

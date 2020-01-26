@@ -1,4 +1,5 @@
 import sqlalchemy
+from flask_sqlalchemy import BaseQuery
 from sqlalchemy.orm import load_only
 
 from flask_electron.dao.data import DataBuffer
@@ -70,12 +71,12 @@ class QueryBuffer:
     def filter_schema(self, schema, fields):
         return list(filter(lambda item: item.get('key') in fields, schema))
 
-    def marshall(self, query, schema, fields):
+    def marshall(self, data, schema, fields):
         if not fields:
             fields = self.model.fields()
-        return DataBuffer(query, self.filter_schema(schema, fields), self.rel, self.exclusions)
+        return DataBuffer(data, self.filter_schema(schema, fields), self.rel, self.exclusions)
 
-    def execute(self, query):
+    def execute(self, query: BaseQuery.statement) -> object:
         try:
             return query()
         except Exception as e:
@@ -99,15 +100,15 @@ class QueryBuffer:
 
     def all(self):
         resp = self.execute(self.query.all)
-        return self.marshall(resp, self.model.get_schema(), self.fields)
+        return self.marshall(resp, self.model.schema(), self.fields)
 
     def one(self):
         resp = self.execute(self.query.one)
-        return self.marshall(resp, self.model.get_schema(), self.fields)
+        return self.marshall(resp, self.model.schema(), self.fields)
 
     def first(self):
         resp = self.execute(self.query.first)
-        return self.marshall(resp, self.model.get_schema(), self.fields)
+        return self.marshall(resp, self.model.schema(), self.fields)
 
     def __iter__(self):
         return self.all()

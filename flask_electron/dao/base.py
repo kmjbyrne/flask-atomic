@@ -1,11 +1,10 @@
 import copy
-
 from datetime import datetime
 
 import sqlalchemy
 
-from flask_electron.dao.data import DataBuffer
 from flask_electron.dao.actions import ActionsModel
+from flask_electron.dao.data import DataBuffer
 from flask_electron.dao.query import QueryBuffer
 from flask_electron.http.exceptions import HTTPException
 
@@ -25,9 +24,9 @@ class BaseDAO:
     querystring = None  # TODO Break out this code to a class and encapsulate mapping a little better
     _actions = ActionsModel
 
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model=None, *args, **kwargs):
         setattr(self.queryargs, 'reverse', False)
-        self.model = model
+        self.model = model or self.model
         if kwargs.get('querystring'):
             self.__querystring(kwargs.get('querystring'))
 
@@ -130,7 +129,7 @@ class BaseDAO:
         try:
             payload['created'] = datetime.now()
             instance = self.model.create(**payload)
-            return DataBuffer(self.save(instance), instance.get_schema(), None)
+            return DataBuffer(self.save(instance), instance.schema(), None)
         except sqlalchemy.exc.IntegrityError as error:
             model = str(self.model.__tablename__).capitalize()
             errorfield = ''
