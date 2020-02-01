@@ -7,6 +7,8 @@ chardet==3.0.4
 Click==7.0
 colorama==0.4.1
 docutils==0.15.2
+entrypoints==0.3
+flake8==3.7.9
 Flask==1.1.1
 Flask-SQLAlchemy==2.4.1
 idna==2.8
@@ -18,12 +20,15 @@ jmespath==0.9.4
 keyring==21.1.0
 livereload==2.6.1
 MarkupSafe==1.1.1
+mccabe==0.6.1
 more-itertools==8.1.0
 packaging==20.1
 pathtools==0.1.2
 pkginfo==1.5.0.1
 port-for==0.3.1
 pyasn1==0.4.8
+pycodestyle==2.5.0
+pyflakes==2.1.1
 Pygments==2.5.2
 PyJWT==1.7.1
 pyparsing==2.4.6
