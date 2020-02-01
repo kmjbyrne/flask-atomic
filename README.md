@@ -1,7 +1,7 @@
-# KBPC
+# Flask Atomic
 
 ![GitHub](https://img.shields.io/github/license/kmjbyrne/kbpc)
-[![PyPI version](https://badge.fury.io/py/kbpc.svg)](https://badge.fury.io/py/kbpc)
+[![PyPI version](https://badge.fury.io/py/flask-atomic.svg)](https://badge.fury.io/py/flask-atomic)
 [![Build Status](https://travis-ci.org/kmjbyrne/kbpc.svg?branch=master)](https://travis-ci.org/kmjbyrne/kbpc)
 [![Coverage Status](https://coveralls.io/repos/github/kmjbyrne/kbpc/badge.svg?branch=master)](https://coveralls.io/github/kmjbyrne/kbpc?branch=master)
 
