@@ -2,7 +2,7 @@
 layout: default
 ---
 
-# Flask Electron GitHub Pages
+# Flask atomic GitHub Pages
 
 ## Introduction
 

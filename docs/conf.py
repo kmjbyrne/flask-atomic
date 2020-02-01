@@ -15,10 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.abspath('..'))
 
-
 # -- Project information -----------------------------------------------------
 
-project = 'Flask Electron'
+project = 'Flask atomic'
 copyright = '2020, Keith Byrne'
 author = 'Keith Byrne'
 
@@ -44,8 +43,6 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-import sphinx_glpi_theme
-import sphinx_rtd_theme
 
 html_theme = "sphinx_rtd_theme"
 # html_theme_path = sphinx_rtd_theme.get_html_themes_path()
