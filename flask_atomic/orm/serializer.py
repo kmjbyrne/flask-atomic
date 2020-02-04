@@ -1,15 +1,7 @@
-from collections import Iterable
-
-from flask_electron.sqlalchemy.declarative import DeclarativeBase
+from flask_atomic.orm.declaratives.base import DeclarativeBase
 
 
-# defining a decorator
 def iterators_only(func):
-    # inner1 is a Wrapper function in
-    # which the argument is called
-
-    # inner function can access the outer local
-    # functions like in this case "func"
     def check(*args, **kwargs):
         def invalid_type(arg):
             if not iter(arg):
@@ -19,8 +11,11 @@ def iterators_only(func):
             return False
 
         if any([invalid_type(param) for param in args]):
-            raise TypeError('Library requires exclusions to be a iterable object, excluding strings.')
+            raise TypeError(
+                'Flask-atomic requires an iterable type, excluding strings.'
+            )
         return func(*args, **kwargs)
+
     return check
 
 
@@ -36,7 +31,7 @@ def get_columns(instance: DeclarativeBase) -> set:
 
 
 @iterators_only
-def merge_column_sets(columns: Iterable, exclusions: Iterable) -> set:
+def merge_column_sets(columns: set, exclusions: set) -> set:
     """
     Take the column set and subtract the exclusions.
     :param columns: set of columns on the instance
@@ -102,7 +97,7 @@ def serialize(instance: {}, exclusions=None, include_relationship=False) -> dict
 
 
 def get_tablename(instance: DeclarativeBase) -> str:
-    return instance.__tablename__
+    return instance.name
 
 
 def get_relationship_keys(instance: DeclarativeBase) -> list:

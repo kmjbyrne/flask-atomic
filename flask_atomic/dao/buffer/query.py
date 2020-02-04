@@ -2,12 +2,12 @@ import sqlalchemy
 from flask_sqlalchemy import BaseQuery
 from sqlalchemy.orm import load_only
 
-from flask_electron.dao.data import DataBuffer
+from flask_atomic.dao.buffer.dyna import DYNADataBuffer
 
 
 class QueryBuffer:
 
-    def __init__(self, query, model, rel=True, view_flagged=False, dao=None):
+    def __init__(self, query, model, rel=True, vflag=False, dao=None):
         self.query = query
         self.model = model
         self.dao = dao
@@ -16,7 +16,7 @@ class QueryBuffer:
         self.rel = rel
         self.filters = None
         self.exclusions = []
-        self.view_flagged = view_flagged
+        self.vflag = vflag
         self.prepare_filters()
 
     def exclude(self, fields):
@@ -58,7 +58,7 @@ class QueryBuffer:
         return self
 
     def order_by(self, field=None, descending=False):
-        order = self.model.id
+        order = self.model.identify_primary_key()
         if field:
             order = field
             self._ordered = True
@@ -68,13 +68,13 @@ class QueryBuffer:
         self.query = self.query.order_by(order)
         return self
 
-    def filter_schema(self, schema, fields):
+    def schema(self, schema, fields):
         return list(filter(lambda item: item.get('key') in fields, schema))
 
     def marshall(self, data, schema, fields):
         if not fields:
-            fields = self.model.fields()
-        return DataBuffer(data, self.filter_schema(schema, fields), self.rel, self.exclusions)
+            fields = self.model.keys()
+        return DYNADataBuffer(data, self.schema(schema, fields), self.rel, self.exclusions)
 
     def execute(self, query: BaseQuery.statement) -> object:
         try:
@@ -84,19 +84,6 @@ class QueryBuffer:
             # db.session.rollback()
         except sqlalchemy.orm.exc.NoResultFound as e:
             raise ValueError('Resource does not exist')
-
-    def show_soft_deletes(self):
-        self.view_flagged = True
-        return self
-
-    def prepare_filters(self):
-        if not self.filters:
-            filters = {}
-            filters.update(active='Y')
-            self.filters = filters
-        if self.view_flagged and self.filters.get('active', None):
-            del self.filters['active']
-        self.query = self.query.filter_by(**self.filters)
 
     def all(self):
         resp = self.execute(self.query.all)
@@ -109,6 +96,15 @@ class QueryBuffer:
     def first(self):
         resp = self.execute(self.query.first)
         return self.marshall(resp, self.model.schema(), self.fields)
+
+    def prepare_filters(self):
+        if not self.filters:
+            filters = {}
+            # filters.update(active='Y')
+            self.filters = filters
+        if self.vflag and self.filters.get('active', None):
+            del self.filters['active']
+        self.query = self.query.filter_by(**self.filters)
 
     def __iter__(self):
         return self.all()

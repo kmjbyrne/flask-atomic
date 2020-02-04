@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
-from flask_electron.db.flaskalchemy import serializer
+from flask_atomic.orm import serializer
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'

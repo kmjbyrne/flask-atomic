@@ -11,8 +11,11 @@ class DataBuffer:
         self.exclusions = exclusions or list()
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
 
+    def schema(self):
+        return self.schema
+
     def name(self):
-        return self.data.__repr__()
+        return str(self.data)
 
     def showrefs(self, value=True):
         """
@@ -28,7 +31,7 @@ class DataBuffer:
     def __instance_prep(self, instance, exclude):
         if not exclude:
             exclude = []
-        return instance.prepare(
+        return instance.serialize(
             rel=self.relationships,
             exc=exclude
         )
