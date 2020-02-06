@@ -1,4 +1,3 @@
-from flask_sqlalchemy import model
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -46,7 +45,7 @@ class CoreMixin(object):
         instance = cls()
         return instance.update(commit=True, **payload)
 
-    def unsafe_delete(self: model):
+    def unsafe_delete(self):
         db.session.delete(self)
         commitsession()
 

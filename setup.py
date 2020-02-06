@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='Flask-Atomic',
-    version='0.0.2',
+    version='0.0.4',
     description='Core code for Flask based projects',
     long_description=long_description,
     long_description_content_type="text/markdown",

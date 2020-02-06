@@ -29,7 +29,7 @@ class BaseDAO:
     filters = {}
 
     def __init__(self, model=None, *args, **kwargs):
-        self.model = model or self.model
+        self.model = model
         if kwargs.get('querystring'):
             self.queryargs = QueryStringProcessor(kwargs.get('querystring'))
 
@@ -69,6 +69,11 @@ class BaseDAO:
         clone = copy.deepcopy(instance)
         instance.delete()
         return clone
+
+    def query(self):
+        query = self.create_query()
+        buffer = QueryBuffer(query, self.model)
+        return buffer
 
     def get(self, flagged=False):
         query = self.create_query()
