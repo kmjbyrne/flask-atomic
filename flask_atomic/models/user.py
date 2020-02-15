@@ -4,8 +4,8 @@ from werkzeug.security import generate_password_hash
 
 from flask_atomic.common.exceptions import MissingConfigurationValue
 from flask_atomic.dao.base import BaseDAO
-from flask_atomic.orm.database import db
 from flask_atomic.orm.declaratives.base import DeclarativeBase
+from flask_atomic.orm.database import db
 from flask_atomic.orm.mixins.columns import CreationTimestampMixin
 from flask_atomic.orm.mixins.columns import PrimaryKeyMixin
 

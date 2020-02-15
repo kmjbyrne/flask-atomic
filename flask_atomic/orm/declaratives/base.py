@@ -31,6 +31,9 @@ class DeclarativeBase(db.Model, CoreMixin):
 
     __abstract__ = True
 
+    def __str__(self):
+        return self.whatami()
+
     @classmethod
     def identify_primary_key(cls):
         return list(cls.__table__.primary_key).pop().name
@@ -43,29 +46,39 @@ class DeclarativeBase(db.Model, CoreMixin):
         return resp
 
     @classmethod
-    def makequery(cls):
+    def makequery(cls, fields=None):
         try:
-            return cls.query
+            # return db.session.query(cls, fields)
+            if not fields:
+                return cls.query
+            return db.session.query(cls, *fields)
         except Exception as e:
             logger.error(str(e))
             db.session.rollback()
-        return cls.query
+        return db.session.query(cls, *fields)
 
     @classmethod
-    def keys(cls, rel=True):
-        all_keys = set(cls.__table__.columns.keys())
-        relations = set(cls.__mapper__.relationships.keys())
+    def relations(cls):
+        return set(cls.__mapper__.relationships.keys())
 
-        if not rel:
-            return all_keys.difference(relations)
-        return all_keys.union(relations)
+    @classmethod
+    def objectcolumns(cls, include_relationships=False):
+        bound_columns = set(cls.__mapper__.columns)
+        if include_relationships:
+            rels = cls.__mapper__.relationships
+            return bound_columns.union(set([i.class_attribute for i in cls.__mapper__.relationships]))
+        return bound_columns
+
+    @classmethod
+    def keys(cls):
+        return set(cls.__table__.columns.keys())
 
     @classmethod
     def schema(cls, rel=True, exclude=None):
         if exclude is None:
             exclude = []
         schema = []
-        for item in [key for key in cls.keys(rel=rel) if key not in exclude]:
+        for item in [key for key in cls.keys() if key not in exclude]:
             schema.append(dict(name=item.replace('_', ' '), key=item))
         return schema
 
@@ -78,7 +91,7 @@ class DeclarativeBase(db.Model, CoreMixin):
     def relationships(self, root=''):
         return list(filter(lambda r: r != root, self.__mapper__.relationships.keys()))
 
-    def columns(self, exc: Optional[list]) -> list:
+    def columns(self, exc: Optional[list] = None) -> list:
         """
         Gets a list of columns to work with, minus the excluded sublist (exc).
 
@@ -100,24 +113,29 @@ class DeclarativeBase(db.Model, CoreMixin):
         # I am not a number :)
         return self.__tablename__
 
-    def process_relationships(self, root: str, exc: list = None):
+    def process_relationships(self, root: str, exc: list = None, rels=None):
         resp = dict()
-        for item in self.relationships(root):
+        if not rels or isinstance(rels, bool):
+            rels = self.relationships(root)
+        for item in rels:
             relationship_instance = getattr(self, item)
             if isinstance(relationship_instance, list):
                 resp[item] = [i.extract_data(exc) for i in relationship_instance]
                 for index, entry in enumerate(relationship_instance):
                     for grandchild in entry.relationships(root):
-                        print(grandchild)
-                        resp[item][index][grandchild] = getattr(entry, grandchild).extract_data()
+                        if grandchild != item:
+                            if isinstance(getattr(entry, grandchild), list):
+                                resp[item][index][grandchild] = [i.extract_data(exc) for i in getattr(entry, grandchild)]
+                            else:
+                                resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(exc)
             elif relationship_instance:
                 resp[item] = relationship_instance.extract_data(exc)
         return resp
 
-    def extract_data(self, exc: Optional[list]) -> dict:
+    def extract_data(self, exc: Optional[list] = None) -> dict:
         resp = dict()
         if exc is None:
-            exc = Iterable()
+            exc = list()
         for column in self.columns(exc):
             if isinstance(getattr(self, column), datetime):
                 resp[column] = str(getattr(self, column))
@@ -159,7 +177,7 @@ class DeclarativeBase(db.Model, CoreMixin):
         if not rel:
             return resp
 
-        resp.update(self.process_relationships(root, exc=exc))
+        resp.update(self.process_relationships(root, rels=rel, exc=exc))
         return resp
 
     def __eq__(self, comparison):

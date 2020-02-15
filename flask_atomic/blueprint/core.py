@@ -1,5 +1,6 @@
 from typing import Optional
 from typing import Type
+from functools import partial
 
 from flask import Blueprint
 from flask import jsonify
@@ -32,13 +33,12 @@ class CoreBlueprint(Blueprint):
 
     """
 
-    dao: Type[BaseDAO]
-    model: Type[DeclarativeBase]
-    methods: Type[list]
-
-    def __init__(self, name, module, model, dao=None, decorator=None, methods=None):
+    def __init__(self, name, module, model, dao=None, decorator=None, methods=None, url_prefix=None, lookupkey=None):
         # Make sure super call stays on top. Otherwise Blueprint functions are inaccessible
         super().__init__(name, module)
+
+        if url_prefix:
+            self.url_prefix = url_prefix
 
         if model is None:
             raise AttributeError('CoreBlueprint requires a model instance.')
@@ -46,10 +46,22 @@ class CoreBlueprint(Blueprint):
         if decorator is None:
             self.decorator = default_decorator
 
-        self.methods = methods if methods else ACCEPTED_METHODS
+        if lookupkey is None:
+            lookupkey = model.identify_primary_key()
+
+        self.lookupkey = lookupkey
+
+        self.methods = methods
+        if methods is None:
+            self.methods = list()
+
         # !!!: Order matters here
+        self.model = model
         self.dao = self.__set_dao(dao, model)
         self.__register_principal_endpoints()
+
+    def allhttp(self):
+        self.methods = ACCEPTED_METHODS
 
     def set_dao(self, dao: Optional[BaseDAO], model: Type[DeclarativeBase]) -> Type[BaseDAO]:
         return self.__set_dao(dao, model)
@@ -111,12 +123,12 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=request.args)
+        dao = self.dao(self.model, querystring=request.args)
         buffer = self.__dao_query_forwarder(dao.get)
-        content = dict(data=buffer.json(), schema=dao.schema())
+        content = dict(data=buffer.json(dao.queryargs.exclusions), schema=dao.schema())
         return JsonOKResponse(content)
 
-    def __default_get_one_request(self, uuid: int) -> Type[json_response]:
+    def __default_get_one_request(self, uuid: str) -> Type[json_response]:
         """
         The principal GET by ID handler for the CoreBlueprint. All GET requests
         that are structured like so:
@@ -134,8 +146,9 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=dict(request.args))
-        buffer = self.__dao_query_forwarder(dao.get_one, uuid)
+        dao = self.dao(self.model, querystring=dict(request.args))
+        query = partial(dao.get_one_by, self.lookupkey, uuid)
+        buffer = self.__dao_query_forwarder(query)
 
         if buffer.data is None:
             return JsonNotFoundResp()
@@ -165,7 +178,7 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=dict(request.args))
+        dao = self.dao(self.model, querystring=dict(request.args))
         buffer = self.__dao_query_forwarder(dao.get_one, uuid)
 
         if buffer.data is None:
@@ -206,7 +219,7 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=dict(request.args))
+        dao = self.dao(self.model, querystring=dict(request.args))
         payload = request.json
 
         try:
@@ -237,7 +250,7 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=dict(request.args))
+        dao = self.dao(self.model, querystring=dict(request.args))
         try:
             self.__dao_query_forwarder(dao.sdelete, uuid)
         except Exception as error:
@@ -264,7 +277,7 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(querystring=dict(request.args))
+        dao = self.dao(self.model, querystring=dict(request.args))
         buffer = dao.get_one(uuid)
         payload = request.json
 

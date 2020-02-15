@@ -31,6 +31,11 @@ class DataBuffer:
     def __instance_prep(self, instance, exclude):
         if not exclude:
             exclude = []
+        if isinstance(instance, tuple):
+            return instance[0].serialize(
+                rel=self.relationships,
+                exc=exclude
+            )
         return instance.serialize(
             rel=self.relationships,
             exc=exclude
@@ -43,6 +48,9 @@ class DataBuffer:
             raise ValueError('Cannot use exclusions that are not in a collection')
 
         exclude = exclude + self.exclusions
+        
+        if isinstance(self.data, list):
+            pass
 
         if self.data is None:
             return list()

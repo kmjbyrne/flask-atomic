@@ -1,27 +1,35 @@
 import sqlalchemy
 from flask_sqlalchemy import BaseQuery
 from sqlalchemy.orm import load_only
+from sqlalchemy.orm import eagerload
 
 from flask_atomic.dao.buffer.dyna import DYNADataBuffer
 
 
 class QueryBuffer:
 
-    def __init__(self, query, model, rel=True, vflag=False, dao=None):
+    def __init__(self, query, model, rel=False, vflag=False, dao=None, queryargs=None):
         self.query = query
         self.model = model
-        self.dao = dao
         self._ordered = False
         self.fields = []
-        self.rel = rel
         self.filters = None
         self.exclusions = []
         self.vflag = vflag
+        self.queryargs = queryargs
         self.prepare_filters()
+        
 
-    def exclude(self, fields):
-        fields = self.model.fields(exc=fields)
-        self.query = self.query.options(load_only(*fields))
+    def exclude(self, exclude):
+        self.exclusions = exclude
+        fields = self.model.keys()
+
+        include = []
+        for item in fields:
+            if item not in exclude:
+                include.append(item)
+
+        self.query = self.query.options(load_only(*include))
         self.fields = fields
         return self
 
@@ -50,11 +58,27 @@ class QueryBuffer:
         self.query = self.query.filter(getattr(self.model, field) <= date)
         return self
 
-    def filter(self, filters):
+    def filter(self, filters, operand='MIN'):
+        namedfilters = tuple()
+        for named_item in [i for i in filters if i]:
+            if operand is False:
+                self.query = self.query.filter(getattr(self.model, named_item[0]) >= named_item[1])
+            else:
+                namedfilters = namedfilters + (getattr(self.model, named_item[0]) <= named_item[1])
+        return self
+
+    def filter_by(self, filters):
         if not filters:
             filters = {}
         self.filters = self.model.checkfilters(filters)
         self.prepare_filters()
+        return self
+
+    def options(self, relationships=None):
+        if not relationships or not isinstance(relationships, list):
+            return self
+        for item in relationships:
+            self.query = self.query.options(eagerload(getattr(self.model, item)))
         return self
 
     def order_by(self, field=None, descending=False):
@@ -69,12 +93,13 @@ class QueryBuffer:
         return self
 
     def schema(self, schema, fields):
+        fields = [i for i in fields if i not in self.exclusions]
         return list(filter(lambda item: item.get('key') in fields, schema))
 
     def marshall(self, data, schema, fields):
         if not fields:
             fields = self.model.keys()
-        return DYNADataBuffer(data, self.schema(schema, fields), self.rel, self.exclusions)
+        return DYNADataBuffer(data, self.schema(schema, fields), self.queryargs.rels, self.exclusions)
 
     def execute(self, query: BaseQuery.statement) -> object:
         try:

@@ -35,7 +35,7 @@ class CoreMixin(object):
             exc = []
 
         normalised_fields = []
-        for field in list(key for key in cls.__tablename__.keys() if
+        for field in list(key for key in cls.keys() if
                           key not in [cls.normalise(e) for e in exc]):
             normalised_fields.append(cls.normalise(field))
         return normalised_fields
