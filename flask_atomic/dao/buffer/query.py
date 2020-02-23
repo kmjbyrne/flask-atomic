@@ -65,7 +65,7 @@ class QueryBuffer:
         for named_item in [i for i in filters if i]:
             if operand == 'HAS':
                 return self.query.filter(getattr(self.model, named_item[0]) == named_item[1])
-            if operand == 'MIN':
+            elif operand == 'MIN':
                 self.query = self.query.filter(getattr(self.model, named_item[0]) >= named_item[1])
             else:
                 namedfilters = namedfilters + (getattr(self.model, named_item[0]) <= named_item[1])
@@ -118,20 +118,33 @@ class QueryBuffer:
             self.fields = self.model.keys()
         return DYNADataBuffer(data, self.schema(schema, self.fields), self.fields, self.queryargs.rels)
 
-    def execute(self, query: BaseQuery.statement) -> object:
-        # First get the set minus the excluded fields
+    def autoquery(self):
         self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
         # Now detect whether we want relationships
         if self.queryargs.rels:
             self.fields = self.fields.union(set(self.model.relations(self.queryargs.rels)))
         self.order_by(self.queryargs.sortkey, descending=self.queryargs.descending)
-        self.filter([self.queryargs.min])
+        self.filter([self.queryargs.min], 'MIN')
         self.filter_by(self.queryargs.filters)
         self.limit(self.queryargs.limit)
         self.options(load_only(*self.fields))
+        return self
+
+    def execute(self, query: BaseQuery.statement) -> object:
+        # self.query = query
+        # # First get the set minus the excluded fields
+        # self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
+        # # Now detect whether we want relationships
+        # if self.queryargs.rels:
+        #     self.fields = self.fields.union(set(self.model.relations(self.queryargs.rels)))
+        # self.order_by(self.queryargs.sortkey, descending=self.queryargs.descending)
+        # self.filter([self.queryargs.min], 'MIN')
+        # self.filter_by(self.queryargs.filters)
+        # self.limit(self.queryargs.limit)
+        # self.options(load_only(*self.fields))
         return query()
 
-    def all(self):
+    def all(self, *args):
         resp = self.execute(self.query.all)
         return self.marshall(resp, self.model.schema())
 

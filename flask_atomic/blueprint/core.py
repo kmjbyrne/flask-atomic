@@ -124,12 +124,10 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(self.model, querystring=request.args)
-        buffer = self.__dao_query_forwarder(dao.get)
-        buffer.relationships = dao.queryargs.rels
+        dao = self.dao(self.model, querystring=request.args).autoquery()
+        buffer = self.__dao_query_forwarder(dao.query().all)
         try:
-            data = buffer.json(dao.queryargs.exclusions)
-            content = dict(data=data, schema=dao.schema())
+            content = dict(data=buffer.json(), schema=buffer.schema)
             return JsonOKResponse(content)
         except AttributeError as error:
             return JsonBadRequestResp(message=str(error))

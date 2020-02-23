@@ -114,11 +114,13 @@ class BaseDAO:
         # buffer.limit(self.queryargs.limit)
         return buffer
 
-    def query(self, wquery=False):
-        if wquery:
-            return self.process_querystring()
+    def query(self, noauto=False):
         query = self.create_query()
-        return QueryBuffer(query, self.model, queryargs=self.queryargs)
+        buffer = QueryBuffer(query, self.model, queryargs=self.queryargs)
+        if noauto:
+            return buffer
+        buffer.autoquery()
+        return buffer
 
     def delete(self, instanceid):
         instance = self.get_one(instanceid).view()
@@ -189,8 +191,8 @@ class BaseDAO:
 
     def create(self, payload):
         self.validate_arguments(payload)
-        instance = self.model.create(**payload)
-        return DataBuffer(self.save(instance), instance.schema())
+        instance = self.model(**payload)
+        return DataBuffer(self.save(instance), instance.schema(), instance.fields(), False)
 
     def save(self, instance):
         try:

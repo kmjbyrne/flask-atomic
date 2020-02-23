@@ -23,7 +23,7 @@ class QueryStringProcessor:
         self.limit = 100
         self.rels = False
         self.min = tuple()
-        self.max = None
+        self.max = tuple()
         self.descending = False
         self.__process_querystring()
 
@@ -36,6 +36,8 @@ class QueryStringProcessor:
         for key, value in (filterkeys):
             if '>' in key:
                 self.min = self.min + (str(key).replace('>', ''), value)
+            elif '<' in key:
+                self.max = self.max + (str(key).replace('<', ''), value)
             elif QUERYSTRING_ARGUMENT_MAP.get(value) is False:
                 self.exclusions.append(key)
             else:

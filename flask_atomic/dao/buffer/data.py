@@ -19,6 +19,9 @@ class DataBuffer:
             raise IndexError('Index exceeds DataBuffer list boundary')
         return self.data[idx]
 
+    def __dict__(self):
+        return dict(data=self.json(), schema=self.schema())
+
     def schema(self):
         return self.schema
 

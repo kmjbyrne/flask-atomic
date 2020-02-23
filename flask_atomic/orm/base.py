@@ -1,4 +1,5 @@
 from datetime import datetime
+from datetime import date
 from typing import Optional
 
 from sqlalchemy.orm.attributes import InstrumentedAttribute
@@ -148,7 +149,7 @@ class DeclarativeBase(db.Model, CoreMixin):
         if exc is None:
             exc = list()
         for column in fields.difference(exc):
-            if isinstance(getattr(self, column), datetime):
+            if isinstance(getattr(self, column), datetime) or isinstance(getattr(self, column), date):
                 resp[column] = str(getattr(self, column))
             else:
                 resp[column] = getattr(self, column)
