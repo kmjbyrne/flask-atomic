@@ -5,7 +5,10 @@ QUERYSTRING_ARGUMENT_MAP = {
 }
 
 QUERYSTRING_CONTROL_KEYS = [
-    'limit', 'page'
+    'exclude',
+    'limit', 'page',
+    'order_by', 'desc',
+    'min', 'max'
 ]
 
 
@@ -54,7 +57,7 @@ class QueryStringProcessor:
         if limit:
             self.limit = int(limit)
 
-        descending = self.querystring.get('descending', False)
+        descending = self.querystring.get('desc', False)
         if descending:
             self.descending = QUERYSTRING_ARGUMENT_MAP.get(descending, None)
 

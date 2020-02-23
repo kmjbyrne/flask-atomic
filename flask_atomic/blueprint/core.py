@@ -1,6 +1,6 @@
+from functools import partial
 from typing import Optional
 from typing import Type
-from functools import partial
 
 from flask import Blueprint
 from flask import jsonify
@@ -13,10 +13,10 @@ from flask_atomic.httputils.responses import JsonDeletedResp
 from flask_atomic.httputils.responses import JsonNotFoundResp
 from flask_atomic.httputils.responses import JsonOKResponse
 from flask_atomic.httputils.responses import json_response
-from flask_atomic.logger import get_logger
-from flask_atomic.orm.declaratives.base import DeclarativeBase
+from flask_atomic.logger import getlogger
+from flask_atomic.orm.base import DeclarativeBase
 
-logger = get_logger(__name__)
+logger = getlogger(__name__)
 UUID = 'uuid'
 ACCEPTED_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
 
@@ -44,7 +44,8 @@ class CoreBlueprint(Blueprint):
             raise AttributeError('CoreBlueprint requires a model instance.')
 
         if decorator is None:
-            self.decorator = default_decorator
+            decorator = default_decorator
+        self.decorator = decorator
 
         if lookupkey is None:
             lookupkey = model.identify_primary_key()
@@ -125,8 +126,13 @@ class CoreBlueprint(Blueprint):
 
         dao = self.dao(self.model, querystring=request.args)
         buffer = self.__dao_query_forwarder(dao.get)
-        content = dict(data=buffer.json(dao.queryargs.exclusions), schema=dao.schema())
-        return JsonOKResponse(content)
+        buffer.relationships = dao.queryargs.rels
+        try:
+            data = buffer.json(dao.queryargs.exclusions)
+            content = dict(data=data, schema=dao.schema())
+            return JsonOKResponse(content)
+        except AttributeError as error:
+            return JsonBadRequestResp(message=str(error))
 
     def __default_get_one_request(self, uuid: str) -> Type[json_response]:
         """
@@ -146,14 +152,20 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(self.model, querystring=dict(request.args))
+        dao = self.dao(self.model, querystring=request.args)
         query = partial(dao.get_one_by, self.lookupkey, uuid)
         buffer = self.__dao_query_forwarder(query)
+        buffer.relationships = dao.queryargs.rels
 
         if buffer.data is None:
             return JsonNotFoundResp()
-        content = dict(data=buffer.json(), schema=dao.schema())
-        return JsonOKResponse(content)
+
+        try:
+            data = buffer.json(dao.queryargs.exclusions)
+            content = dict(data=data, schema=dao.schema())
+            return JsonOKResponse(content)
+        except AttributeError as error:
+            return JsonBadRequestResp(message=str(error))
 
     def __default_get_field_request(self, uuid: int, field: str) -> Type[json_response]:
         """
@@ -282,11 +294,13 @@ class CoreBlueprint(Blueprint):
         payload = request.json
 
         try:
-            buffer.update(uuid, payload)
+            dao.iupdate(buffer.view(), uuid, payload)
             content = dict(data=buffer.json(), schema=dao.schema())
             return JsonOKResponse(content)
         except Exception as error:
             return JsonBadRequestResp(error=str(error))
+        except AssertionError as validationerr:
+            return jsonify(error=validationerr), 400
 
     def __register_principal_endpoints(self) -> None:
         # r = Route, m = HTTP method, h = handler function for the endpoint

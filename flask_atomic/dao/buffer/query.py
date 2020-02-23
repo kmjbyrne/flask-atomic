@@ -1,7 +1,6 @@
-import sqlalchemy
 from flask_sqlalchemy import BaseQuery
-from sqlalchemy.orm import load_only
 from sqlalchemy.orm import eagerload
+from sqlalchemy.orm import load_only
 
 from flask_atomic.dao.buffer.dyna import DYNADataBuffer
 
@@ -12,13 +11,16 @@ class QueryBuffer:
         self.query = query
         self.model = model
         self._ordered = False
-        self.fields = []
+        self.fields = None
         self.filters = None
+        self.relationships = False
         self.exclusions = []
         self.vflag = vflag
         self.queryargs = queryargs
         self.prepare_filters()
-        
+
+    def includerels(self, args):
+        self.relationships = args
 
     def exclude(self, exclude):
         self.exclusions = exclude
@@ -61,10 +63,16 @@ class QueryBuffer:
     def filter(self, filters, operand='MIN'):
         namedfilters = tuple()
         for named_item in [i for i in filters if i]:
-            if operand is False:
+            if operand == 'HAS':
+                return self.query.filter(getattr(self.model, named_item[0]) == named_item[1])
+            if operand == 'MIN':
                 self.query = self.query.filter(getattr(self.model, named_item[0]) >= named_item[1])
             else:
                 namedfilters = namedfilters + (getattr(self.model, named_item[0]) <= named_item[1])
+        return self
+
+    def efilter(self, expression_filter):
+        self.query.filter(expression_filter)
         return self
 
     def filter_by(self, filters):
@@ -75,13 +83,16 @@ class QueryBuffer:
         return self
 
     def options(self, relationships=None):
-        if not relationships or not isinstance(relationships, list):
+        if not relationships:
             return self
-        for item in relationships:
-            self.query = self.query.options(eagerload(getattr(self.model, item)))
+        elif isinstance(relationships, tuple):
+            for item in relationships:
+                self.query = self.query.options(eagerload(item))
         return self
 
     def order_by(self, field=None, descending=False):
+        if not field:
+            return self
         order = self.model.identify_primary_key()
         if field:
             order = field
@@ -93,34 +104,44 @@ class QueryBuffer:
         return self
 
     def schema(self, schema, fields):
-        fields = [i for i in fields if i not in self.exclusions]
-        return list(filter(lambda item: item.get('key') in fields, schema))
+        return list(
+            map(
+                lambda x: dict(
+                    name=' '.join(x.get('key').split('_')).title(),
+                    key=x.get('key')
+                ), filter(lambda item: item.get('key') in fields, schema)
+            )
+        )
 
-    def marshall(self, data, schema, fields):
-        if not fields:
-            fields = self.model.keys()
-        return DYNADataBuffer(data, self.schema(schema, fields), self.queryargs.rels, self.exclusions)
+    def marshall(self, data, schema):
+        if not self.fields:
+            self.fields = self.model.keys()
+        return DYNADataBuffer(data, self.schema(schema, self.fields), self.fields, self.queryargs.rels)
 
     def execute(self, query: BaseQuery.statement) -> object:
-        try:
-            return query()
-        except Exception as e:
-            raise e
-            # db.session.rollback()
-        except sqlalchemy.orm.exc.NoResultFound as e:
-            raise ValueError('Resource does not exist')
+        # First get the set minus the excluded fields
+        self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
+        # Now detect whether we want relationships
+        if self.queryargs.rels:
+            self.fields = self.fields.union(set(self.model.relations(self.queryargs.rels)))
+        self.order_by(self.queryargs.sortkey, descending=self.queryargs.descending)
+        self.filter([self.queryargs.min])
+        self.filter_by(self.queryargs.filters)
+        self.limit(self.queryargs.limit)
+        self.options(load_only(*self.fields))
+        return query()
 
     def all(self):
         resp = self.execute(self.query.all)
-        return self.marshall(resp, self.model.schema(), self.fields)
+        return self.marshall(resp, self.model.schema())
 
     def one(self):
         resp = self.execute(self.query.one)
-        return self.marshall(resp, self.model.schema(), self.fields)
+        return self.marshall(resp, self.model.schema())
 
     def first(self):
         resp = self.execute(self.query.first)
-        return self.marshall(resp, self.model.schema(), self.fields)
+        return self.marshall(resp, self.model.schema())
 
     def prepare_filters(self):
         if not self.filters:

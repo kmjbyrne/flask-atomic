@@ -11,7 +11,17 @@ def get_rotating_file_handler(logfile='/tmp/app.log', level=logging.INFO, log_fo
     return log_file_handler
 
 
-def get_logger(application_name, logtype=None):
+def getinfologger(application_name, logtype=None):
+    logger = getlogger(application_name)
+    info_logger_file_handler = RotatingFileHandler(f"/tmp/${application_name}.application.log")
+    info_logger_file_handler.setLevel(logging.INFO)
+    log_format = logging.Formatter(DEFAULT_FORMAT)
+    info_logger_file_handler.setFormatter(log_format)
+    logger.addHandler(info_logger_file_handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+def getlogger(application_name, logtype=None):
     logger = logging.getLogger(__name__)
 
     error_logger_file_handler = RotatingFileHandler(f"/tmp/${application_name}.error.log")
@@ -19,7 +29,7 @@ def get_logger(application_name, logtype=None):
     log_format = logging.Formatter(DEFAULT_FORMAT)
     error_logger_file_handler.setFormatter(log_format)
 
-    info_logger_file_handler = RotatingFileHandler(f"/tmp/${application_name}.error.log")
+    info_logger_file_handler = RotatingFileHandler(f"/tmp/${application_name}.application.log")
     info_logger_file_handler.setLevel(logging.INFO)
     log_format = logging.Formatter(DEFAULT_FORMAT)
     info_logger_file_handler.setFormatter(log_format)

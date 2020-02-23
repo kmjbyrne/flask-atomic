@@ -1,4 +1,4 @@
-from flask_atomic.orm.declaratives.base import DeclarativeBase
+from flask_atomic.orm.base import DeclarativeBase
 
 
 def iterators_only(func):
@@ -12,7 +12,7 @@ def iterators_only(func):
 
         if any([invalid_type(param) for param in args]):
             raise TypeError(
-                'Flask-atomic requires an iterable type, excluding strings.'
+                'I require an iterable type, excluding strings.'
             )
         return func(*args, **kwargs)
 

@@ -9,7 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_atomic.blueprint.core import CoreBlueprint
 from flask_atomic.dao.base import BaseDAO
 from flask_atomic.dao.buffer.data import DataBuffer
-from flask_atomic.orm.declaratives.base import DeclarativeBase
+from flask_atomic.orm.base import DeclarativeBase
 
 app = Flask(__name__)
 db = SQLAlchemy()

@@ -4,7 +4,7 @@ from typing import Union
 
 from flask import Response
 
-from flask_atomic.orm.declaratives.base import DeclarativeBase
+from flask_atomic.orm.base import DeclarativeBase
 
 # HTTP Response messages
 R202 = 'Resource successfully marked for deletion'
@@ -25,7 +25,7 @@ def checktype(data: Union[list, dict, DeclarativeBase]) -> Union[list, dict]:
     :rtype: dict
     """
 
-    if isinstance(data, list):
+    if isinstance(data, list) and not isinstance(data[0], dict):
         return [i.extract_data() for i in data]
     elif isinstance(data, str):
         return data

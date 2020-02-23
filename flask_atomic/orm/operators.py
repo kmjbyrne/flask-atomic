@@ -1,10 +1,10 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
 
-from flask_atomic.logger import get_logger
+from flask_atomic.logger import getlogger
 from flask_atomic.orm.database import db
 
-logger = get_logger(__name__)
+logger = getlogger(__name__)
 
 
 def commitsession():

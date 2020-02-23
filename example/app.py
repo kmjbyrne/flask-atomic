@@ -6,8 +6,8 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 
 from flask_atomic.blueprint.core import CoreBlueprint
+from flask_atomic.orm.base import DeclarativeBase
 from flask_atomic.orm.database import db
-from flask_atomic.orm.declaratives.base import DeclarativeBase
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////' + os.path.join('/tmp', 'database.db')

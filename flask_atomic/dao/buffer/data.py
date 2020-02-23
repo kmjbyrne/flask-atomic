@@ -1,15 +1,23 @@
 class DataBuffer:
 
-    def __init__(self, data, schema, rel=True, exclusions=None):
+    def __init__(self, data, schema, fields, rels):
         self.object = True
-        self.relationships = rel
-        self.showrefs(rel)
+        self.relationships = rels
         if isinstance(data, list):
             self.object = False
         self.schema = schema
         self.data = data
-        self.exclusions = exclusions or list()
+        self.base = ''
+        self.fields = fields
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
+
+    def hrefbase(self, base):
+        self.base = base
+
+    def __getitem__(self, idx):
+        if idx > len(self.data):
+            raise IndexError('Index exceeds DataBuffer list boundary')
+        return self.data[idx]
 
     def schema(self):
         return self.schema
@@ -28,39 +36,49 @@ class DataBuffer:
         self.relationships = value
         return self
 
-    def __instance_prep(self, instance, exclude):
+    def prepare(self, instance, exclude):
         if not exclude:
             exclude = []
         if isinstance(instance, tuple):
             return instance[0].serialize(
-                rel=self.relationships,
-                exc=exclude
+                rels=self.relationships,
+                fields=self.fields
             )
         return instance.serialize(
-            rel=self.relationships,
-            exc=exclude
+            rels=self.relationships,
+            fields=self.fields
         )
 
-    def json(self, exclude=None):
+    def json(self, exclude=None, relations=None):
         if not exclude:
             exclude = list()
         elif exclude and not hasattr(exclude, '__iter__'):
             raise ValueError('Cannot use exclusions that are not in a collection')
 
-        exclude = exclude + self.exclusions
-        
-        if isinstance(self.data, list):
-            pass
+        # exclude = exclude + [self.exclusions]
+        # if relations is not None:
+        #     self.relationships = relations
 
         if self.data is None:
             return list()
 
-        if self.object:
-            return self.__instance_prep(self.data, exclude)
-        return [self.__instance_prep(entry, exclude) for entry in self.data]
+        if not isinstance(self.data, list):
+            instance = self.prepare(self.data, self.fields)
+            instance['_href'] = '{}/{}'.format(self.base, self.data.id)
+            return instance
+
+        resp = []
+        for entry in self.data:
+            json = self.prepare(entry, self.fields)
+            json['_href'] = '{}/{}'.format(self.base, entry.id)
+            resp.append(json)
+        return resp
 
     def view(self):
         return self.data
 
     def __iter__(self):
         return iter(self.data)
+
+    def __str__(self):
+        return dict(data=self.json())

@@ -45,7 +45,7 @@ class CoreMixin(object):
         instance = cls()
         return instance.update(commit=True, **payload)
 
-    def unsafe_delete(self):
+    def delete(self):
         db.session.delete(self)
         commitsession()
 

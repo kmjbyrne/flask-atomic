@@ -16,14 +16,30 @@ class BaseDAO:
         self.json = True
         self.exclusions = list()
         self.rels: bool = False
-        self.sortkey: str = getattr(model, model.identify_primary_key())
+        self.sortkey: None = getattr(model, model.identify_primary_key())
         self.descending: bool = False
         # TODO Break out this code to a class and encapsulate mapping a little better
         self.querystring = None
         self.filters = {}
         self._schema = None
-        self.model = model
-        self.queryargs: Optional[QueryStringProcessor] = QueryStringProcessor(kwargs.get('querystring'))
+        self.model: DeclarativeBase = model
+        self.queryargs: Optional[QueryStringProcessor] = QueryStringProcessor(kwargs.get('querystring', None))
+        self.auto = False
+        if self.queryargs:
+            self.auto = True
+
+    def autoquery(self):
+        self.auto = True
+        return self
+
+    def i(self):
+        return self.model
+
+    @property
+    def iquery(self):
+        query = self.create_query()
+        self._schema = query.column_descriptions
+        return QueryBuffer(query, self.model).query
 
     def schema(self, exclude=None):
         if not exclude:
@@ -73,13 +89,36 @@ class BaseDAO:
                 '<{}> not accepted as input field(s)'.format(', '.join(invalid_fields)))
         return True
 
+    def relationattrs(self, relations):
+        included_relationships = tuple()
+        if relations and not isinstance(relations, list):
+            for item in self.model.relationattrs():
+                included_relationships = included_relationships + (getattr(self.model, item),)
+            return included_relationships
+        elif isinstance(relations, list):
+            for item in relations:
+                included_relationships.append(getattr(self.model, item))
+            return included_relationships
+        return None
+
     def create_query(self, fields=None, flagged=False):
         return self.model.makequery(fields)
 
-    def query(self):
-        query = self.create_query()
-        buffer = QueryBuffer(query, self.model, self.queryargs)
+    def process_querystring(self):
+        query = self.create_query(self.columns(self.queryargs.exclusions))
+        self._schema = query.column_descriptions
+        buffer = QueryBuffer(query, self.model, queryargs=self.queryargs)
+        buffer.order_by(self.queryargs.sortkey or self.sortkey, descending=self.queryargs.descending)
+        buffer.filter([self.queryargs.min])
+        buffer.filter_by(self.queryargs.filters)
+        # buffer.limit(self.queryargs.limit)
         return buffer
+
+    def query(self, wquery=False):
+        if wquery:
+            return self.process_querystring()
+        query = self.create_query()
+        return QueryBuffer(query, self.model, queryargs=self.queryargs)
 
     def delete(self, instanceid):
         instance = self.get_one(instanceid).view()
@@ -88,16 +127,32 @@ class BaseDAO:
         return clone
 
     def get(self, flagged=False):
+        return self._get()
         query = self.create_query(self.columns(self.queryargs.exclusions))
         self._schema = query.column_descriptions
         buffer = QueryBuffer(query, self.model, vflag=flagged, queryargs=self.queryargs)
         buffer.order_by(self.queryargs.sortkey or self.sortkey, descending=self.queryargs.descending)
         buffer.filter([self.queryargs.min])
+        buffer.filter_by(self.queryargs.filters)
+        # buffer.includerels(self.relationattrs(self.queryargs.rels))
+
         try:
-            return buffer.filter_by(self.queryargs.filters).options(self.queryargs.rels).limit(
-                self.queryargs.limit).all()
+            return buffer.limit(self.queryargs.limit).all()
         except AttributeError as error:
             raise Exception(str(error))
+
+    def _get(self, flagged=False):
+        query = self.create_query(self.columns(self.queryargs.exclusions))
+        self._schema = query.column_descriptions
+        # includes
+        # excludes
+        # relationships
+        buffer = QueryBuffer(query, self.model, queryargs=self.queryargs)
+        return buffer.all()
+        # try:
+        #     return buffer.limit(self.queryargs.limit).all()
+        # except AttributeError as error:
+        #     raise Exception(str(error))
 
     def get_one(self, value, flagged=False):
         self.filters.update({self.model.id: value})
@@ -150,6 +205,13 @@ class BaseDAO:
         if 'last_update' in instance.fields():
             payload.update(last_update=datetime.now())
 
+        instance.update(**payload)
+        instance.save()
+        return instance
+
+    def iupdate(self, instance, instance_id, payload):
+        if 'last_update' in instance.fields():
+            payload.update(last_update=datetime.now())
         instance.update(**payload)
         instance.save()
         return instance

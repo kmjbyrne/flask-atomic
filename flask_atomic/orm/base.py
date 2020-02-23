@@ -1,14 +1,13 @@
-from collections import Iterable
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-from flask_atomic.logger import get_logger
+from flask_atomic.logger import getlogger
 from flask_atomic.orm.database import db
 from flask_atomic.orm.mixins.core import CoreMixin
 
-logger = get_logger(__name__)
+logger = getlogger(__name__)
 
 
 class DeclarativeBase(db.Model, CoreMixin):
@@ -58,7 +57,15 @@ class DeclarativeBase(db.Model, CoreMixin):
         return db.session.query(cls, *fields)
 
     @classmethod
-    def relations(cls):
+    def relations(cls, flag):
+        if flag == True:
+            return set(cls.__mapper__.relationships.keys())
+        elif isinstance(flag, list):
+            return set(flag)
+        return set()
+
+    @classmethod
+    def relationattrs(cls):
         return set(cls.__mapper__.relationships.keys())
 
     @classmethod
@@ -119,38 +126,43 @@ class DeclarativeBase(db.Model, CoreMixin):
             rels = self.relationships(root)
         for item in rels:
             relationship_instance = getattr(self, item)
+            # relationship_instance.uselist
+            fields = set(relationship_instance.keys()).difference(exc)
             if isinstance(relationship_instance, list):
-                resp[item] = [i.extract_data(exc) for i in relationship_instance]
+                # if relationship_instance.uselist:
+                resp[item] = [i.extract_data(fields) for i in relationship_instance]
                 for index, entry in enumerate(relationship_instance):
                     for grandchild in entry.relationships(root):
                         if grandchild != item:
                             if isinstance(getattr(entry, grandchild), list):
-                                resp[item][index][grandchild] = [i.extract_data(exc) for i in getattr(entry, grandchild)]
+                                resp[item][index][grandchild] = [i.extract_data(fields) for i in
+                                                                 getattr(entry, grandchild)]
                             else:
-                                resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(exc)
+                                resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(fields)
             elif relationship_instance:
-                resp[item] = relationship_instance.extract_data(exc)
+                resp[item] = relationship_instance.extract_data(fields)
         return resp
 
-    def extract_data(self, exc: Optional[list] = None) -> dict:
+    def extract_data(self, fields, exc: Optional[list] = None) -> dict:
         resp = dict()
         if exc is None:
             exc = list()
-        for column in self.columns(exc):
+        for column in fields.difference(exc):
             if isinstance(getattr(self, column), datetime):
                 resp[column] = str(getattr(self, column))
             else:
                 resp[column] = getattr(self, column)
         return resp
 
-    def serialize(self, exc: Optional[list], rel=True, root=None):
+    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None):
         """
         This utility function dynamically converts Alchemy model classes into a
         dict using introspective lookups. This saves on manually mapping each
         model and all the fields. However, exclusions should be noted. Such as
         passwords and protected properties.
 
-        :param rel: Whether or not to introspect to relationships
+        :param fields: More of a whitelist of fields to include (preferred way)
+        :param rels: Whether or not to introspect to relationships
         :param exc: Fields to exclude from query result set
         :param root: Root model for processing relationships. This acts as a
         recursive sentinel to prevent infinite recursion due to selecting oneself
@@ -164,6 +176,9 @@ class DeclarativeBase(db.Model, CoreMixin):
         :rtype: dict
         """
 
+        if not fields:
+            fields = set(self.fields())
+
         if root is None:
             root = self.whatami()
 
@@ -173,11 +188,10 @@ class DeclarativeBase(db.Model, CoreMixin):
             exc.append('password')
 
         # Define our model properties here. Columns and Schema relationships
-        resp = self.extract_data(exc)
-        if not rel:
+        resp = self.extract_data(fields, exc)
+        if not rels:
             return resp
-
-        resp.update(self.process_relationships(root, rels=rel, exc=exc))
+        resp.update(self.process_relationships(root, rels=rels, exc=exc))
         return resp
 
     def __eq__(self, comparison):
