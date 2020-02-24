@@ -64,7 +64,7 @@ class BaseDAO:
 
     def columns(self, exclusions):
         if not exclusions:
-            return None
+            exclusions = set()
         includes = []
         for item in self.model.objectcolumns(False):
             comp = item
@@ -103,16 +103,6 @@ class BaseDAO:
 
     def create_query(self, fields=None, flagged=False):
         return self.model.makequery(fields)
-
-    def process_querystring(self):
-        query = self.create_query(self.columns(self.queryargs.exclusions))
-        self._schema = query.column_descriptions
-        buffer = QueryBuffer(query, self.model, queryargs=self.queryargs)
-        buffer.order_by(self.queryargs.sortkey or self.sortkey, descending=self.queryargs.descending)
-        buffer.filter([self.queryargs.min])
-        buffer.filter_by(self.queryargs.filters)
-        # buffer.limit(self.queryargs.limit)
-        return buffer
 
     def query(self, noauto=False):
         query = self.create_query()

@@ -127,7 +127,7 @@ class CoreBlueprint(Blueprint):
         dao = self.dao(self.model, querystring=request.args).autoquery()
         buffer = self.__dao_query_forwarder(dao.query().all)
         try:
-            content = dict(data=buffer.json(), schema=buffer.schema)
+            content = dict(data=buffer.json(exclude=dao.queryargs.exclusions), schema=buffer.schema)
             return JsonOKResponse(content)
         except AttributeError as error:
             return JsonBadRequestResp(message=str(error))

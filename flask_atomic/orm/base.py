@@ -121,41 +121,42 @@ class DeclarativeBase(db.Model, CoreMixin):
         # I am not a number :)
         return self.__tablename__
 
-    def process_relationships(self, root: str, exc: list = None, rels=None):
+    def process_relationships(self, root: str, exclude: list = None, rels=None):
         resp = dict()
         if not rels or isinstance(rels, bool):
             rels = self.relationships(root)
         for item in rels:
             relationship_instance = getattr(self, item)
-            # relationship_instance.uselist
-            fields = set(relationship_instance.keys()).difference(exc)
             if isinstance(relationship_instance, list):
                 # if relationship_instance.uselist:
-                resp[item] = [i.extract_data(fields) for i in relationship_instance]
+                resp[item] = []
                 for index, entry in enumerate(relationship_instance):
-                    for grandchild in entry.relationships(root):
-                        if grandchild != item:
-                            if isinstance(getattr(entry, grandchild), list):
-                                resp[item][index][grandchild] = [i.extract_data(fields) for i in
-                                                                 getattr(entry, grandchild)]
-                            else:
-                                resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(fields)
+                    fields = set(entry.keys()).difference(exclude)
+                    resp[item].append(entry.extract_data(set(entry.keys()).difference(exclude)))
+                    # for grandchild in entry.relationships(root):
+                    #     if grandchild != item:
+                    #         if isinstance(getattr(entry, grandchild), list):
+                    #             resp[item][index][grandchild] = [i.extract_data(fields) for i in
+                    #                                              getattr(entry, grandchild)]
+                    #         else:
+                    #             resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(fields)
             elif relationship_instance:
+                fields = set(relationship_instance.keys()).difference(exclude)
                 resp[item] = relationship_instance.extract_data(fields)
         return resp
 
-    def extract_data(self, fields, exc: Optional[list] = None) -> dict:
+    def extract_data(self, fields, exclude: Optional[set] = None) -> dict:
         resp = dict()
-        if exc is None:
-            exc = list()
-        for column in fields.difference(exc):
+        if exclude is None:
+            exclude = list()
+        for column in fields.difference(exclude):
             if isinstance(getattr(self, column), datetime) or isinstance(getattr(self, column), date):
                 resp[column] = str(getattr(self, column))
             else:
                 resp[column] = getattr(self, column)
         return resp
 
-    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None):
+    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None, exclude=set()):
         """
         This utility function dynamically converts Alchemy model classes into a
         dict using introspective lookups. This saves on manually mapping each
@@ -184,15 +185,14 @@ class DeclarativeBase(db.Model, CoreMixin):
             root = self.whatami()
 
         if exc is None:
-            exc = ['password']
-        else:
-            exc.append('password')
+            exc = set(['password'])
 
+        set(exclude).union(exc)
         # Define our model properties here. Columns and Schema relationships
         resp = self.extract_data(fields, exc)
-        if not rels:
+        if not rels or len(set(self.relationships())) < 1:
             return resp
-        resp.update(self.process_relationships(root, rels=rels, exc=exc))
+        resp.update(self.process_relationships(root, rels=rels, exclude=exclude))
         return resp
 
     def __eq__(self, comparison):

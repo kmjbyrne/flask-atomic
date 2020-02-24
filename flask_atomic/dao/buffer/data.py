@@ -1,12 +1,13 @@
 class DataBuffer:
 
-    def __init__(self, data, schema, fields, rels):
+    def __init__(self, data, schema, fields, rels, excs=set()):
         self.object = True
         self.relationships = rels
         if isinstance(data, list):
             self.object = False
         self.schema = schema
         self.data = data
+        self.exclusions = excs
         self.base = ''
         self.fields = fields
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
@@ -45,11 +46,13 @@ class DataBuffer:
         if isinstance(instance, tuple):
             return instance[0].serialize(
                 rels=self.relationships,
-                fields=self.fields
+                fields=self.fields,
+                exclude=self.exclusions
             )
         return instance.serialize(
             rels=self.relationships,
-            fields=self.fields
+            fields=self.fields,
+            exclude=self.exclusions
         )
 
     def json(self, exclude=None, relations=None):

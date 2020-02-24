@@ -72,7 +72,7 @@ class QueryBuffer:
         return self
 
     def efilter(self, expression_filter):
-        self.query.filter(expression_filter)
+        self.query = self.query.filter(expression_filter)
         return self
 
     def filter_by(self, filters):
@@ -116,7 +116,8 @@ class QueryBuffer:
     def marshall(self, data, schema):
         if not self.fields:
             self.fields = self.model.keys()
-        return DYNADataBuffer(data, self.schema(schema, self.fields), self.fields, self.queryargs.rels)
+        return DYNADataBuffer(data, self.schema(schema, self.fields), self.fields, self.queryargs.rels,
+                              self.queryargs.exclusions)
 
     def autoquery(self):
         self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
@@ -131,17 +132,6 @@ class QueryBuffer:
         return self
 
     def execute(self, query: BaseQuery.statement) -> object:
-        # self.query = query
-        # # First get the set minus the excluded fields
-        # self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
-        # # Now detect whether we want relationships
-        # if self.queryargs.rels:
-        #     self.fields = self.fields.union(set(self.model.relations(self.queryargs.rels)))
-        # self.order_by(self.queryargs.sortkey, descending=self.queryargs.descending)
-        # self.filter([self.queryargs.min], 'MIN')
-        # self.filter_by(self.queryargs.filters)
-        # self.limit(self.queryargs.limit)
-        # self.options(load_only(*self.fields))
         return query()
 
     def all(self, *args):
