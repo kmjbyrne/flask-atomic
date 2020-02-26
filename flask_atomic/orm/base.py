@@ -148,7 +148,7 @@ class DeclarativeBase(db.Model, CoreMixin):
     def extract_data(self, fields, exclude: Optional[set] = None) -> dict:
         resp = dict()
         if exclude is None:
-            exclude = list()
+            exclude = set()
         for column in fields.difference(exclude):
             if isinstance(getattr(self, column), datetime) or isinstance(getattr(self, column), date):
                 resp[column] = str(getattr(self, column))
@@ -156,7 +156,7 @@ class DeclarativeBase(db.Model, CoreMixin):
                 resp[column] = getattr(self, column)
         return resp
 
-    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None, exclude=set()):
+    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None, exclude=None):
         """
         This utility function dynamically converts Alchemy model classes into a
         dict using introspective lookups. This saves on manually mapping each
@@ -170,6 +170,7 @@ class DeclarativeBase(db.Model, CoreMixin):
         recursive sentinel to prevent infinite recursion due to selecting oneself
         as a related model, and then infinitely trying to traverse the roots
         own relationships, from itself over and over.
+        :param exclude: Exclusion in set form. Currently in favour of exc param.
 
         Only remedy to this is also to use one way relationships. Avoiding any
         back referencing of models.
@@ -178,6 +179,10 @@ class DeclarativeBase(db.Model, CoreMixin):
         :rtype: dict
         """
 
+        if exclude is None:
+            exclude = set()
+        else:
+            exclude = set(exclude)
         if not fields:
             fields = set(self.fields())
 

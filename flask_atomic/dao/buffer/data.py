@@ -1,3 +1,6 @@
+import sqlalchemy
+
+
 class DataBuffer:
 
     def __init__(self, data, schema, fields, rels, excs=set()):
@@ -40,9 +43,7 @@ class DataBuffer:
         self.relationships = value
         return self
 
-    def prepare(self, instance, exclude):
-        if not exclude:
-            exclude = []
+    def prepare(self, instance=None, exclude=None):
         if isinstance(instance, tuple):
             return instance[0].serialize(
                 rels=self.relationships,
@@ -81,6 +82,8 @@ class DataBuffer:
         return resp
 
     def view(self):
+        if isinstance(self.data, tuple):
+            return next(iter(self.data), None)
         return self.data
 
     def __iter__(self):

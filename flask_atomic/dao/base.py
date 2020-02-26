@@ -4,6 +4,8 @@ from typing import Optional
 
 import sqlalchemy
 
+from flask import request
+
 from flask_atomic.dao.buffer.data import DataBuffer
 from flask_atomic.dao.buffer.query import QueryBuffer
 from flask_atomic.dao.querystring import QueryStringProcessor
@@ -19,17 +21,20 @@ class BaseDAO:
         self.sortkey: None = getattr(model, model.identify_primary_key())
         self.descending: bool = False
         # TODO Break out this code to a class and encapsulate mapping a little better
-        self.querystring = None
         self.filters = {}
         self._schema = None
-        self.model: DeclarativeBase = model
+        self.model = model
+        self.queryargs = None
+        self.__provided = kwargs.get('querystring', None)
         self.queryargs: Optional[QueryStringProcessor] = QueryStringProcessor(kwargs.get('querystring', None))
         self.auto = False
-        if self.queryargs:
+        if self.__provided:
             self.auto = True
 
     def autoquery(self):
-        self.auto = True
+        if not self.__provided:
+            self.queryargs = QueryStringProcessor(request.args)
+            self.auto = True
         return self
 
     def i(self):
@@ -42,25 +47,19 @@ class BaseDAO:
         return QueryBuffer(query, self.model).query
 
     def schema(self, exclude=None):
-        if not exclude:
-            exclude = []
-        scheme = {
+        schema = {
             'model': self._schema[0].get('name'),
             'fields': []
         }
 
         for item in self._schema[1:]:
-            scheme['fields'].append(
+            schema['fields'].append(
                 dict(name=item.get('name'), type=str(item.get('type')), expr=str(item.get('expr')))
             )
-        return scheme
+        return schema
 
     def __iskey(self, val):
         return val in self.model.keys()
-
-    @classmethod
-    def model_schema(cls, exclude=None):
-        return cls.model.schema(exclude=exclude)
 
     def columns(self, exclusions):
         if not exclusions:
@@ -120,18 +119,18 @@ class BaseDAO:
 
     def get(self, flagged=False):
         return self._get()
-        query = self.create_query(self.columns(self.queryargs.exclusions))
-        self._schema = query.column_descriptions
-        buffer = QueryBuffer(query, self.model, vflag=flagged, queryargs=self.queryargs)
-        buffer.order_by(self.queryargs.sortkey or self.sortkey, descending=self.queryargs.descending)
-        buffer.filter([self.queryargs.min])
-        buffer.filter_by(self.queryargs.filters)
-        # buffer.includerels(self.relationattrs(self.queryargs.rels))
-
-        try:
-            return buffer.limit(self.queryargs.limit).all()
-        except AttributeError as error:
-            raise Exception(str(error))
+        # query = self.create_query(self.columns(self.queryargs.exclusions))
+        # self._schema = query.column_descriptions
+        # buffer = QueryBuffer(query, self.model, vflag=flagged, queryargs=self.queryargs)
+        # buffer.order_by(self.queryargs.sortkey or self.sortkey, descending=self.queryargs.descending)
+        # buffer.filter([self.queryargs.min])
+        # buffer.filter_by(self.queryargs.filters)
+        # # buffer.includerels(self.relationattrs(self.queryargs.rels))
+        #
+        # try:
+        #     return buffer.limit(self.queryargs.limit).all()
+        # except AttributeError as error:
+        #     raise Exception(str(error))
 
     def _get(self, flagged=False):
         query = self.create_query(self.columns(self.queryargs.exclusions))
