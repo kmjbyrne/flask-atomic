@@ -3,8 +3,8 @@ from flask_atomic.dao.buffer.data import DataBuffer
 
 class DYNADataBuffer(DataBuffer):
 
-    def __init__(self, data, schema, fields, rels, *args, **kwargs):
-        super().__init__(data, schema, fields, rels, *args, **kwargs)
+    def __init__(self, data, schema, fields, rels, exclude, query, **kwargs):
+        super().__init__(data, schema, fields, rels, exclude, query, **kwargs)
 
     def __iter__(self):
         return iter(self.json())

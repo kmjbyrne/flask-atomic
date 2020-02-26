@@ -30,6 +30,7 @@ class DeclarativeBase(db.Model, CoreMixin):
     """
 
     __abstract__ = True
+    # active = db.Column(db.String(5), default='Y')
 
     def __str__(self):
         return self.whatami()
@@ -44,6 +45,10 @@ class DeclarativeBase(db.Model, CoreMixin):
         for k, v in filters.items():
             resp[cls.normalise(k)] = v
         return resp
+
+    @classmethod
+    def getquery(cls):
+        return db.session.query
 
     @classmethod
     def makequery(cls, fields=None):
@@ -121,7 +126,7 @@ class DeclarativeBase(db.Model, CoreMixin):
         # I am not a number :)
         return self.__tablename__
 
-    def process_relationships(self, root: str, exclude: list = None, rels=None):
+    def process_relationships(self, root: str, exclude: set = None, rels=None):
         resp = dict()
         if not rels or isinstance(rels, bool):
             rels = self.relationships(root)
@@ -156,7 +161,7 @@ class DeclarativeBase(db.Model, CoreMixin):
                 resp[column] = getattr(self, column)
         return resp
 
-    def serialize(self, fields=None, exc: Optional[list] = None, rels=False, root=None, exclude=None):
+    def serialize(self, fields=None, exc: Optional[set] = None, rels=False, root=None, exclude=None, functions=None):
         """
         This utility function dynamically converts Alchemy model classes into a
         dict using introspective lookups. This saves on manually mapping each
@@ -190,11 +195,21 @@ class DeclarativeBase(db.Model, CoreMixin):
             root = self.whatami()
 
         if exc is None:
-            exc = set(['password'])
+            exc = {'password'}
 
         set(exclude).union(exc)
         # Define our model properties here. Columns and Schema relationships
         resp = self.extract_data(fields, exc)
+
+        for key, value in functions.items():
+            resp[f'_{key}'] = value(getattr(self, key))
+
+        restricted_fields = fields.discard(getattr(self, 'RESTRICTED_FIELDS', set()))
+        if restricted_fields:
+            fields.discard(restricted_fields)
+            exclude = exclude.union(restricted_fields or set())
+
+        rels = rels or set(self.relationships()).intersection(fields)
         if not rels or len(set(self.relationships())) < 1:
             return resp
         resp.update(self.process_relationships(root, rels=rels, exclude=exclude))

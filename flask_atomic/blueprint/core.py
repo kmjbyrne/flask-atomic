@@ -150,17 +150,15 @@ class CoreBlueprint(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
-        dao = self.dao(self.model, querystring=request.args)
+        dao = self.dao(self.model, querystring=request.args).autoquery()
         query = partial(dao.get_one_by, self.lookupkey, uuid)
         buffer = self.__dao_query_forwarder(query)
         buffer.relationships = dao.queryargs.rels
 
         if buffer.data is None:
             return JsonNotFoundResp()
-
         try:
-            data = buffer.json(dao.queryargs.exclusions)
-            content = dict(data=data, schema=dao.schema())
+            content = dict(data=buffer.json(exclude=dao.queryargs.exclusions), schema=buffer.schema)
             return JsonOKResponse(content)
         except AttributeError as error:
             return JsonBadRequestResp(message=str(error))

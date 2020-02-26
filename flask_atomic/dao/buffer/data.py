@@ -3,7 +3,7 @@ import sqlalchemy
 
 class DataBuffer:
 
-    def __init__(self, data, schema, fields, rels, excs=set()):
+    def __init__(self, data, schema, fields, rels, excs=None, query=None, **kwargs):
         self.object = True
         self.relationships = rels
         if isinstance(data, list):
@@ -13,6 +13,7 @@ class DataBuffer:
         self.exclusions = excs
         self.base = ''
         self.fields = fields
+        self.query = query
         self.include = list(map(lambda sch: sch.get('key'), self.schema))
 
     def hrefbase(self, base):
@@ -48,12 +49,14 @@ class DataBuffer:
             return instance[0].serialize(
                 rels=self.relationships,
                 fields=self.fields,
-                exclude=self.exclusions
+                exclude=self.exclusions,
+                functions=self.query.counts
             )
         return instance.serialize(
             rels=self.relationships,
             fields=self.fields,
-            exclude=self.exclusions
+            exclude=self.exclusions,
+            functions=self.query.counts
         )
 
     def json(self, exclude=None, relations=None):

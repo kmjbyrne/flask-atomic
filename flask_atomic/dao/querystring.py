@@ -8,7 +8,8 @@ QUERYSTRING_CONTROL_KEYS = [
     'exclude',
     'limit', 'page',
     'order_by', 'desc',
-    'min', 'max'
+    'min', 'max', 'only',
+    'count'
 ]
 
 
@@ -24,6 +25,8 @@ class QueryStringProcessor:
         self.rels = False
         self.min = tuple()
         self.max = tuple()
+        self.include = set()
+        self.counts = {}
         self.descending = False
         self.__process_querystring()
 
@@ -51,6 +54,10 @@ class QueryStringProcessor:
             else:
                 self.rels = rels.split(',')
 
+        if self.querystring.get('only', None):
+            for field in self.querystring.get('only').split(','):
+                self.include.add(field)
+
         order = self.querystring.get('order_by', False)
         if order:
             self.sortkey = order
@@ -63,6 +70,12 @@ class QueryStringProcessor:
         if descending:
             self.descending = QUERYSTRING_ARGUMENT_MAP.get(descending, None)
 
+        counts = self.querystring.get('count', None)
+        if counts:
+            for field in counts.split(','):
+                # Like a partial function, call it on the relations when ready
+                self.counts[field] = len
+
         gt = self.querystring.get('gt', False)
         if gt:
-            self.gt = get
+            self.gt = gt

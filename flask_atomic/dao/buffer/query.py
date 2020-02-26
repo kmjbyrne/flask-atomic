@@ -1,6 +1,7 @@
 from flask_sqlalchemy import BaseQuery
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm import load_only
+from sqlalchemy import func
 
 from flask_atomic.dao.buffer.dyna import DYNADataBuffer
 
@@ -116,14 +117,20 @@ class QueryBuffer:
     def marshall(self, data, schema):
         if not self.fields:
             self.fields = self.model.keys()
-        return DYNADataBuffer(data, self.schema(schema, self.fields), self.fields, self.queryargs.rels,
-                              self.queryargs.exclusions)
+        return DYNADataBuffer(
+            data, self.schema(schema, self.fields), self.fields, self.queryargs.rels,
+            self.queryargs.exclusions, self.queryargs
+        )
 
     def autoquery(self):
         self.fields = set(self.model.fields(exc=self.queryargs.exclusions))
         # Now detect whether we want relationships
+        if self.queryargs.include:
+            self.fields = self.queryargs.include
+
         if self.queryargs.rels:
-            self.fields = self.fields.union(set(self.model.relations(self.queryargs.rels)))
+            self.fields.union(set(self.model.relations(self.queryargs.rels)))
+
         self.order_by(self.queryargs.sortkey, descending=self.queryargs.descending)
         self.filter([self.queryargs.min], 'MIN')
         self.filter_by(self.queryargs.filters)
