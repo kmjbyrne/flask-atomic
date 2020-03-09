@@ -13,10 +13,8 @@ from flask_atomic.httputils.responses import JsonDeletedResp
 from flask_atomic.httputils.responses import JsonNotFoundResp
 from flask_atomic.httputils.responses import JsonOKResponse
 from flask_atomic.httputils.responses import json_response
-from flask_atomic.logger import getlogger
 from flask_atomic.orm.base import DeclarativeBase
 
-logger = getlogger(__name__)
 UUID = 'uuid'
 ACCEPTED_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
 
@@ -108,7 +106,7 @@ class CoreBlueprint(Blueprint):
     def __dao_query_forwarder(self, query, arg=None):
         return query(arg)
 
-    def __default_get_request(self) -> Type[json_response]:
+    def __default_get_request(self, **kwargs) -> Type[json_response]:
         """
         The principal GET handler for the CoreBlueprint. All GET requests that are
         structured like so:
@@ -199,7 +197,7 @@ class CoreBlueprint(Blueprint):
         except AttributeError:
             return JsonNotFoundResp(dict(error=f'{field} is not a valid field'))
 
-    def __default_post_request(self) -> Type[json_response]:
+    def __default_post_request(self, **kwargs) -> Type[json_response]:
         """
         The principal POST handler for the CoreBlueprint. All POST requests
         that are structured like so:
@@ -229,6 +227,8 @@ class CoreBlueprint(Blueprint):
 
         dao = self.dao(self.model, querystring=dict(request.args))
         payload = request.json
+        if 'id' in payload.keys():
+            del payload['id']
 
         try:
             buffer = dao.create(payload)
@@ -237,7 +237,7 @@ class CoreBlueprint(Blueprint):
         content = dict(message='{} created!'.format(buffer.name()), data=buffer.json())
         return JsonOKResponse(content)
 
-    def __default_delete_request(self, uuid: int) -> Type[json_response]:
+    def __default_delete_request(self, uuid: int, **kwargs) -> Type[json_response]:
 
         """
         The principal DELETE handler for the CoreBlueprint. All DELETE requests
@@ -265,7 +265,7 @@ class CoreBlueprint(Blueprint):
             return JsonBadRequestResp(error=str(error))
         return JsonDeletedResp()
 
-    def __default_put_request(self, uuid: int) -> Type[json_response]:
+    def __default_put_request(self, uuid: int, **kwargs) -> Type[json_response]:
         """
         The principal PUT handler for the CoreBlueprint. All PUT requests
         that are structured like so:

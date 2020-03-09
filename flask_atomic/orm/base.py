@@ -3,12 +3,30 @@ from datetime import date
 from typing import Optional
 
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-
-from flask_atomic.logger import getlogger
+from sqlalchemy.orm import dynamic
 from flask_atomic.orm.database import db
 from flask_atomic.orm.mixins.core import CoreMixin
 
-logger = getlogger(__name__)
+
+def extract(model, fields=None, exclude: Optional[set] = None) -> dict:
+    resp = dict()
+    if exclude is None:
+        exclude = set()
+
+    if fields is None:
+        fields = model.keys()
+
+    restricted_fields = getattr(model, 'RESTRICTED_FIELDS', set())
+    if restricted_fields:
+        fields.discard(restricted_fields)
+        exclude = exclude.union(restricted_fields or set())
+
+    for column in set(fields).difference(set(exclude)):
+        if isinstance(getattr(model, column), datetime) or isinstance(getattr(model, column), date):
+            resp[column] = str(getattr(model, column))
+        else:
+            resp[column] = getattr(model, column)
+    return resp
 
 
 class DeclarativeBase(db.Model, CoreMixin):
@@ -132,12 +150,19 @@ class DeclarativeBase(db.Model, CoreMixin):
             rels = self.relationships(root)
         for item in rels:
             relationship_instance = getattr(self, item)
-            if isinstance(relationship_instance, list):
+
+            if isinstance(relationship_instance, dynamic.AppenderMixin):
+                # TO handle dynamic relationships (lazy=dynamic)
+                fields = set(map(lambda x: x.key, relationship_instance._entity_zero().column_attrs)).difference(exclude)
+                resp[item] = []
+                for index, entry in enumerate(relationship_instance.all()):
+                    resp[item].append(extract(entry, fields))
+            elif isinstance(relationship_instance, list):
                 # if relationship_instance.uselist:
                 resp[item] = []
                 for index, entry in enumerate(relationship_instance):
                     fields = set(entry.keys()).difference(exclude)
-                    resp[item].append(entry.extract_data(set(entry.keys()).difference(exclude)))
+                    resp[item].append(entry.extract(set(entry.keys()).difference(exclude)))
                     # for grandchild in entry.relationships(root):
                     #     if grandchild != item:
                     #         if isinstance(getattr(entry, grandchild), list):
@@ -147,14 +172,23 @@ class DeclarativeBase(db.Model, CoreMixin):
                     #             resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(fields)
             elif relationship_instance:
                 fields = set(relationship_instance.keys()).difference(exclude)
-                resp[item] = relationship_instance.extract_data(fields)
+                resp[item] = relationship_instance.extract(fields)
         return resp
 
-    def extract_data(self, fields, exclude: Optional[set] = None) -> dict:
+    def extract(self, fields=None, exclude: Optional[set] = None) -> dict:
         resp = dict()
         if exclude is None:
             exclude = set()
-        for column in fields.difference(exclude):
+
+        if fields is None:
+            fields = self.keys()
+
+        restricted_fields = getattr(self, 'RESTRICTED_FIELDS', set())
+        if restricted_fields:
+            fields.discard(restricted_fields)
+            exclude = exclude.union(restricted_fields or set())
+
+        for column in set(fields).difference(set(exclude)):
             if isinstance(getattr(self, column), datetime) or isinstance(getattr(self, column), date):
                 resp[column] = str(getattr(self, column))
             else:
@@ -168,6 +202,7 @@ class DeclarativeBase(db.Model, CoreMixin):
         model and all the fields. However, exclusions should be noted. Such as
         passwords and protected properties.
 
+        :param functions:
         :param fields: More of a whitelist of fields to include (preferred way)
         :param rels: Whether or not to introspect to relationships
         :param exc: Fields to exclude from query result set
@@ -184,6 +219,8 @@ class DeclarativeBase(db.Model, CoreMixin):
         :rtype: dict
         """
 
+        if functions is None:
+            functions = {}
         if exclude is None:
             exclude = set()
         else:
@@ -199,12 +236,13 @@ class DeclarativeBase(db.Model, CoreMixin):
 
         set(exclude).union(exc)
         # Define our model properties here. Columns and Schema relationships
-        resp = self.extract_data(fields, exc)
+        resp = self.extract(fields, exc)
 
-        for key, value in functions.items():
-            resp[f'_{key}'] = value(getattr(self, key))
+        if functions:
+            for key, value in functions.items():
+                resp[f'_{key}'] = value(getattr(self, key))
 
-        restricted_fields = fields.discard(getattr(self, 'RESTRICTED_FIELDS', set()))
+        restricted_fields = set(fields).discard(getattr(self, 'RESTRICTED_FIELDS', set()))
         if restricted_fields:
             fields.discard(restricted_fields)
             exclude = exclude.union(restricted_fields or set())

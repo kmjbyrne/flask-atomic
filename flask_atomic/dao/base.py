@@ -4,6 +4,7 @@ from typing import Optional
 
 import sqlalchemy
 
+from flask import current_app
 from flask import request
 
 from flask_atomic.dao.buffer.data import DataBuffer
@@ -187,7 +188,8 @@ class BaseDAO:
         try:
             instance.save(commit=True)
             return instance
-        except sqlalchemy.exc.IntegrityError:
+        except sqlalchemy.exc.IntegrityError as error:
+            current_app.logger.error(str(error))
             raise HTTPException('Entity with part or all of these details already exists', code=409)
 
     def update(self, instance_id, payload):

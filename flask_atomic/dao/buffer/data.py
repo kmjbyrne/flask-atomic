@@ -50,18 +50,18 @@ class DataBuffer:
                 rels=self.relationships,
                 fields=self.fields,
                 exclude=self.exclusions,
-                functions=self.query.counts
+                functions=self.query.counts or None
             )
         return instance.serialize(
             rels=self.relationships,
             fields=self.fields,
             exclude=self.exclusions,
-            functions=self.query.counts
+            functions=getattr(self.query, 'counts', None)
         )
 
     def json(self, exclude=None, relations=None):
         if not exclude:
-            exclude = list()
+            exclude = set()
         elif exclude and not hasattr(exclude, '__iter__'):
             raise ValueError('Cannot use exclusions that are not in a collection')
 
@@ -70,17 +70,17 @@ class DataBuffer:
         #     self.relationships = relations
 
         if self.data is None:
-            return list()
+            return set()
 
         if not isinstance(self.data, list):
             instance = self.prepare(self.data, self.fields)
-            instance['_href'] = '{}/{}'.format(self.base, self.data.id)
+            # instance['_href'] = '{}/{}'.format(self.base, self.data.id)
             return instance
 
         resp = []
         for entry in self.data:
             json = self.prepare(entry, self.fields)
-            json['_href'] = '{}/{}'.format(self.base, entry.id)
+            # json['_href'] = '{}/{}'.format(self.base, entry.id)
             resp.append(json)
         return resp
 
