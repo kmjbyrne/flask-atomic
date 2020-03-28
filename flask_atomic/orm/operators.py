@@ -1,8 +1,19 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DataError
 
 from flask_atomic.logger import getlogger
 from flask_atomic.orm.database import db
+
+DATA_ERROR = 'Value provided for {} is too large.'
+EXCMAP = {
+    '9h9h': lambda x: DATA_ERROR.format(str(str(x).split('\'').pop(1)).capitalize())
+}
+
+
+def __process_error(err, info):
+    db.session.rollback()
+    raise ValueError(info)
 
 
 def commitsession():
@@ -14,5 +25,7 @@ def commitsession():
         db.session.close()
     except IntegrityError as integerror:
         raise integerror
-    except Exception:
+    except DataError as error:
+        return __process_error(error, EXCMAP[error.code](error))
+    except Exception as error:
         raise Exception

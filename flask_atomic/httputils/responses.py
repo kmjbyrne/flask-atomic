@@ -11,6 +11,7 @@ R202 = 'Resource successfully marked for deletion'
 
 # HTTP Response errors
 E404 = 'Resource not found'
+E401 = 'This action is not allowed. Forbidden'
 
 
 def checktype(data: Union[list, dict, DeclarativeBase]) -> Union[list, dict]:
@@ -71,6 +72,7 @@ JsonCreatedResponse = functools.partial(json_response, status=201)
 JsonDeletedResp = functools.partial(json_response, status=202, message=R202)
 JsonBadRequestResp = functools.partial(json_response, status=400)
 JsonNotFoundResp = functools.partial(json_response, status=404, error=E404)
+JsonForbiddenResp = functools.partial(json_response, status=401, error=E401)
 JsonNotAllowedResponse = functools.partial(json_response, status=405)
 JsonOverloadResponse = functools.partial(json_response, status=429)
 JsonConflictResponse = functools.partial(json_response, status=409)

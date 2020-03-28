@@ -302,7 +302,7 @@ class CoreBlueprint(Blueprint):
         # r = Route, m = HTTP method, h = handler function for the endpoint
         # TODO: Might break this out into an operations class later
         route_table = [
-            dict(route='/', method='GET', hdl=self.__default_get_request),
+            dict(route='', method='GET', hdl=self.__default_get_request),
             dict(route=f'/<{UUID}>', method='GET', hdl=self.__default_get_one_request),
             dict(route=f'/<{UUID}>/<field>', method='GET', hdl=self.__default_get_field_request),
             dict(route='/', method='POST', hdl=self.__default_post_request),

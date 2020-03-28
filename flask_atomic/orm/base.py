@@ -146,33 +146,56 @@ class DeclarativeBase(db.Model, CoreMixin):
 
     def process_relationships(self, root: str, exclude: set = None, rels=None):
         resp = dict()
-        if not rels or isinstance(rels, bool):
+
+        if rels is None or isinstance(rels, bool):
             rels = self.relationships(root)
-        for item in rels:
-            relationship_instance = getattr(self, item)
+
+        for idx, item in enumerate(rels):
+            # First check if it is a sub lookup
+            _lookup = None
+            if hasattr(self, '__i__' + item):
+                resp[item] = getattr(self, '__i__' + item)
+                continue
+
+            sublookup = False
+            if '.' in item:
+                sublookup = True
+                lookup = item.split('.')
+                _lookup = lookup.copy()
+                relationship_instance = getattr(getattr(self, lookup.pop(0), None), lookup.pop())
+            else:
+                relationship_instance = getattr(self, item, None)
 
             if isinstance(relationship_instance, dynamic.AppenderMixin):
                 # TO handle dynamic relationships (lazy=dynamic)
                 fields = set(map(lambda x: x.key, relationship_instance._entity_zero().column_attrs)).difference(exclude)
                 resp[item] = []
-                for index, entry in enumerate(relationship_instance.all()):
-                    resp[item].append(extract(entry, fields))
+                if hasattr(self, '__i__' + item):
+                    resp[item] = getattr(self, '__i__' + item)
+                else:
+                    for index, entry in enumerate(relationship_instance.all()):
+                        resp[item].append(extract(entry, fields))
             elif isinstance(relationship_instance, list):
                 # if relationship_instance.uselist:
-                resp[item] = []
+                if sublookup:
+                    parent = _lookup.pop(0)
+                    attr = _lookup.pop()
+                else:
+                    resp[item] = []
                 for index, entry in enumerate(relationship_instance):
                     fields = set(entry.keys()).difference(exclude)
-                    resp[item].append(entry.extract(set(entry.keys()).difference(exclude)))
-                    # for grandchild in entry.relationships(root):
-                    #     if grandchild != item:
-                    #         if isinstance(getattr(entry, grandchild), list):
-                    #             resp[item][index][grandchild] = [i.extract_data(fields) for i in
-                    #                                              getattr(entry, grandchild)]
-                    #         else:
-                    #             resp[item][index][grandchild] = getattr(entry, grandchild).extract_data(fields)
+                    if sublookup:
+                        if not resp.get(parent, None):
+                            resp[parent] = dict()
+                        resp[parent].setdefault(attr, []).append(entry.extract(fields))
+                    else:
+                        resp[item].append(entry.extract(set(entry.keys()).difference(exclude)))
             elif relationship_instance:
                 fields = set(relationship_instance.keys()).difference(exclude)
-                resp[item] = relationship_instance.extract(fields)
+                if _lookup:
+                    resp[_lookup.pop(0)][_lookup.pop()] = relationship_instance.extract(fields)
+                else:
+                    resp[item] = relationship_instance.extract(fields)
         return resp
 
     def extract(self, fields=None, exclude: Optional[set] = None) -> dict:
@@ -250,6 +273,11 @@ class DeclarativeBase(db.Model, CoreMixin):
         rels = rels or set(self.relationships()).intersection(fields)
         if not rels or len(set(self.relationships())) < 1:
             return resp
+
+        # for rel in rels:
+        #     if rel in [i.split('__i__').pop() for i in self.__dict__ if '__i__' in i]:
+        #         rels.remove(rel)
+
         resp.update(self.process_relationships(root, rels=rels, exclude=exclude))
         return resp
 

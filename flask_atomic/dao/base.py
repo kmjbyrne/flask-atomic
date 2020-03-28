@@ -115,7 +115,10 @@ class BaseDAO:
     def delete(self, instanceid):
         instance = self.get_one(instanceid).view()
         clone = copy.deepcopy(instance)
-        instance.delete()
+        try:
+            instance.delete()
+        except AttributeError:
+            raise AttributeError('This resource does not exist or may have already been deleted')
         return clone
 
     def get(self, flagged=False):
