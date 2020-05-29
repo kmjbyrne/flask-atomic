@@ -10,7 +10,7 @@ from flask import request
 from flask_atomic.dao.buffer.data import DataBuffer
 from flask_atomic.dao.buffer.query import QueryBuffer
 from flask_atomic.dao.querystring import QueryStringProcessor
-from flask_atomic.httputils.exceptions import HTTPException
+from flask_atomic.httputils.exceptions import HTTPConflict
 
 
 class BaseDAO:
@@ -193,7 +193,7 @@ class BaseDAO:
             return instance
         except sqlalchemy.exc.IntegrityError as error:
             current_app.logger.error(str(error))
-            raise HTTPException('Entity with part or all of these details already exists', code=409)
+            raise HTTPConflict(f'{str(instance).capitalize()} with part or all of these details already exists')
 
     def update(self, instance_id, payload):
         instance = self.get_one(instance_id).view()
@@ -222,7 +222,7 @@ class BaseDAO:
 
         instance = self.get_one(instance_id, flagged=True).view()
         if instance is None or instance.active == 'D':
-            raise ValueError('This entry does not exist or maybe have been marked for deletion.')
+            raise ValueError('This entry does not exist or maybe has been marked for deletion.')
         instance.active = 'D'
         instance.save()
         return instance

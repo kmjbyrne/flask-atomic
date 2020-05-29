@@ -24,8 +24,11 @@ def commitsession():
         db.session.rollback()
         db.session.close()
     except IntegrityError as integerror:
+        db.session.rollback()
         raise integerror
     except DataError as error:
+        db.session.rollback()
         return __process_error(error, EXCMAP[error.code](error))
     except Exception as error:
+        db.session.rollback()
         raise Exception

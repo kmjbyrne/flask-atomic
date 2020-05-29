@@ -14,7 +14,7 @@ PASSWORD_MIN = 8
 
 class BaseUser(DeclarativeBase, PrimaryKeyMixin, CreationTimestampMixin):
     __abstract__ = True
-    username = db.Column(db.String(120), unique=True)
+    username = db.Column(db.String(120), nullable=True, unique=True)
     forename = db.Column(db.String(120))
     surname = db.Column(db.String(120))
     password = db.Column(db.Text, nullable=False)

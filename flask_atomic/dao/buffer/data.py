@@ -50,13 +50,15 @@ class DataBuffer:
                 rels=self.relationships,
                 fields=self.fields,
                 exclude=self.exclusions,
-                functions=self.query.counts or None
+                functions=self.query.counts or None,
+                private=True
             )
         return instance.serialize(
             rels=self.relationships,
             fields=self.fields,
             exclude=self.exclusions,
-            functions=getattr(self.query, 'counts', None)
+            functions=getattr(self.query, 'counts', None),
+            private=True
         )
 
     def json(self, exclude=None, relations=None):

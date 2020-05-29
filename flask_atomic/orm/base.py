@@ -198,7 +198,7 @@ class DeclarativeBase(db.Model, CoreMixin):
                     resp[item] = relationship_instance.extract(fields)
         return resp
 
-    def extract(self, fields=None, exclude: Optional[set] = None) -> dict:
+    def extract(self, fields=None, exclude: Optional[set] = None, **kwargs) -> dict:
         resp = dict()
         if exclude is None:
             exclude = set()
@@ -207,7 +207,7 @@ class DeclarativeBase(db.Model, CoreMixin):
             fields = self.keys()
 
         restricted_fields = getattr(self, 'RESTRICTED_FIELDS', set())
-        if restricted_fields:
+        if restricted_fields and not kwargs.get('private', None):
             fields.discard(restricted_fields)
             exclude = exclude.union(restricted_fields or set())
 
@@ -218,7 +218,8 @@ class DeclarativeBase(db.Model, CoreMixin):
                 resp[column] = getattr(self, column)
         return resp
 
-    def serialize(self, fields=None, exc: Optional[set] = None, rels=False, root=None, exclude=None, functions=None):
+    def serialize(self, fields=None, exc: Optional[set] = None, rels=False, root=None, exclude=None, functions=None,
+                  **kwargs):
         """
         This utility function dynamically converts Alchemy model classes into a
         dict using introspective lookups. This saves on manually mapping each
@@ -259,7 +260,7 @@ class DeclarativeBase(db.Model, CoreMixin):
 
         set(exclude).union(exc)
         # Define our model properties here. Columns and Schema relationships
-        resp = self.extract(fields, exc)
+        resp = self.extract(fields, exc, **kwargs)
 
         if functions:
             for key, value in functions.items():
