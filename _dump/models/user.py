@@ -3,6 +3,7 @@ from flask import current_app
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
+from flask_atomic.common.exceptions import MissingConfigurationValue
 from flask_atomic.builder.dao import ModelDAO
 from flask_atomic.orm.base import DeclarativeBase
 from flask_atomic.orm.database import db
@@ -93,7 +94,7 @@ class UserDAO(ModelDAO):
         """
 
         if current_app.config.get('SECRET_KEY') is None:
-            raise RuntimeError('SECRET_KEY missing')
+            raise MissingConfigurationValue('SECRET_KEY')
         return generate_password_hash(password)
 
     def check_user_password(self, password):

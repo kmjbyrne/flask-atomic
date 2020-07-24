@@ -50,9 +50,6 @@ class DeclarativeBase(db.Model, CoreMixin):
     __abstract__ = True
     # active = db.Column(db.String(5), default='Y')
 
-    def __hash__(self):
-        return self.id
-
     def __str__(self):
         return self.whatami()
 
@@ -284,3 +281,16 @@ class DeclarativeBase(db.Model, CoreMixin):
 
         resp.update(self.process_relationships(root, rels=rels, exclude=exclude))
         return resp
+
+    def __eq__(self, comparison):
+        if type(self) != type(comparison):
+            raise ValueError('Objects are not the same. Cannot compare')
+        base = self.columns()
+        base_dictionary = self.__dict__
+        comp_dictionary = self.__dict__
+        flag = True
+        for column_name in base:
+            if base_dictionary[column_name] != comp_dictionary[column_name]:
+                flag = False
+                break
+        return flag

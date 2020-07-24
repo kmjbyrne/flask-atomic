@@ -8,11 +8,10 @@ from flask import request
 
 from flask_atomic.blueprint.decorators import default_decorator
 from flask_atomic.dao.base import BaseDAO
-from flask_atomic.httputils.responses import JsonBadRequestResp
-from flask_atomic.httputils.responses import JsonDeletedResp
-from flask_atomic.httputils.responses import JsonNotFoundResp
-from flask_atomic.httputils.responses import JsonOKResponse
-from flask_atomic.httputils.responses import json_response
+from flask_atomic.http.exceptions import HTTPBadRequest
+from flask_atomic.http.exceptions import HTTPNotFound
+from flask_atomic.http.exceptions import HTTPConflict
+from flask_atomic.http.responses import HTTPSuccess
 from flask_atomic.orm.base import DeclarativeBase
 
 UUID = 'uuid'
@@ -106,7 +105,7 @@ class CoreBlueprint(Blueprint):
     def __dao_query_forwarder(self, query, arg=None):
         return query(arg)
 
-    def __default_get_request(self, **kwargs) -> Type[json_response]:
+    def __default_get_request(self, **kwargs) -> HTTPSuccess:
         """
         The principal GET handler for the CoreBlueprint. All GET requests that are
         structured like so:
@@ -125,12 +124,13 @@ class CoreBlueprint(Blueprint):
         dao = self.dao(self.model, querystring=request.args).autoquery()
         buffer = self.__dao_query_forwarder(dao.query().all)
         try:
-            content = dict(data=buffer.json(exclude=dao.queryargs.exclusions), schema=buffer.schema)
-            return JsonOKResponse(content)
+            data = buffer.json(exclude=dao.queryargs.exclusions)
+            schema = buffer.schema
+            return HTTPSuccess(data, schema=schema)
         except AttributeError as error:
-            return JsonBadRequestResp(message=str(error))
+            raise HTTPBadRequest(str(error))
 
-    def __default_get_one_request(self, uuid: str) -> Type[json_response]:
+    def __default_get_one_request(self, uuid: str) -> HTTPSuccess:
         """
         The principal GET by ID handler for the CoreBlueprint. All GET requests
         that are structured like so:
@@ -154,14 +154,15 @@ class CoreBlueprint(Blueprint):
         buffer.relationships = dao.queryargs.rels
 
         if buffer.data is None:
-            return JsonNotFoundResp()
+            raise HTTPNotFound()
         try:
-            content = dict(data=buffer.json(exclude=dao.queryargs.exclusions), schema=buffer.schema)
-            return JsonOKResponse(content)
+            data = buffer.json(exclude=dao.queryargs.exclusions)
+            schema = buffer.schema
+            return HTTPSuccess(data, schema=schema)
         except AttributeError as error:
-            return JsonBadRequestResp(message=str(error))
+            raise HTTPBadRequest(str(error))
 
-    def __default_get_field_request(self, uuid: int, field: str) -> Type[json_response]:
+    def __default_get_field_request(self, uuid: int, field: str) -> Type[HTTPSuccess]:
         """
         The principal GET.Field handler for the CoreBlueprint. All GET requests
         that are structured like so:
@@ -188,16 +189,17 @@ class CoreBlueprint(Blueprint):
         buffer = self.__dao_query_forwarder(dao.get_one, uuid)
 
         if buffer.data is None:
-            return JsonNotFoundResp()
+            raise HTTPNotFound()
         if uuid is None or field is None:
-            return JsonNotFoundResp()
+            raise HTTPNotFound()
 
         try:
-            return JsonOKResponse({field: getattr(buffer.view(), field)})
+            data = {field: getattr(buffer.view(), field)}
+            return HTTPSuccess(data)
         except AttributeError:
-            return JsonNotFoundResp(dict(error=f'{field} is not a valid field'))
+            raise HTTPBadRequest(f'{field} is not a valid field')
 
-    def __default_post_request(self, **kwargs) -> Type[json_response]:
+    def __default_post_request(self, **kwargs) -> HTTPSuccess:
         """
         The principal POST handler for the CoreBlueprint. All POST requests
         that are structured like so:
@@ -233,11 +235,10 @@ class CoreBlueprint(Blueprint):
         try:
             buffer = dao.create(payload)
         except ValueError as error:
-            return JsonBadRequestResp(error=str(error))
-        content = dict(message='{} created!'.format(buffer.name()), data=buffer.json())
-        return JsonOKResponse(content)
+            raise HTTPBadRequest(str(error))
+        return HTTPSuccess(buffer.json(), message='{} created!'.format(buffer.name()))
 
-    def __default_delete_request(self, uuid: int, **kwargs) -> Type[json_response]:
+    def __default_delete_request(self, uuid: int, **kwargs) -> HTTPSuccess:
 
         """
         The principal DELETE handler for the CoreBlueprint. All DELETE requests
@@ -262,10 +263,10 @@ class CoreBlueprint(Blueprint):
         try:
             self.__dao_query_forwarder(dao.sdelete, uuid)
         except Exception as error:
-            return JsonBadRequestResp(error=str(error))
-        return JsonDeletedResp()
+            return HTTPBadRequest(str(error))
+        return HTTPSuccess()
 
-    def __default_put_request(self, uuid: int, **kwargs) -> Type[json_response]:
+    def __default_put_request(self, uuid: int, **kwargs) -> HTTPSuccess:
         """
         The principal PUT handler for the CoreBlueprint. All PUT requests
         that are structured like so:
@@ -291,12 +292,9 @@ class CoreBlueprint(Blueprint):
 
         try:
             dao.iupdate(buffer.view(), uuid, payload)
-            content = dict(data=buffer.json(), schema=dao.schema())
-            return JsonOKResponse(content)
+            return HTTPSuccess(buffer.json(), schema=dao.schema())
         except Exception as error:
-            return JsonBadRequestResp(error=str(error))
-        except AssertionError as validationerr:
-            return jsonify(error=validationerr), 400
+            raise HTTPBadRequest(str(error))
 
     def __register_principal_endpoints(self) -> None:
         # r = Route, m = HTTP method, h = handler function for the endpoint

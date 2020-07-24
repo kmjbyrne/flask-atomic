@@ -10,7 +10,7 @@ from flask import request
 from flask_atomic.dao.buffer.data import DataBuffer
 from flask_atomic.dao.buffer.query import QueryBuffer
 from flask_atomic.dao.querystring import QueryStringProcessor
-from flask_atomic.httputils.exceptions import HTTPConflict
+from flask_atomic.http.exceptions import HTTPConflict
 
 
 class BaseDAO:
@@ -149,6 +149,14 @@ class BaseDAO:
         # except AttributeError as error:
         #     raise Exception(str(error))
 
+    def one(self, value, field=None):
+        if not field:
+            field = self.model.identify_primary_key()
+        self.filters.update({field: value})
+        query = self.create_query(self.columns(self.queryargs.exclusions))
+        buffer = QueryBuffer(query, self.model, vflag=False, queryargs=self.queryargs)
+        return buffer.filter_by(self.filters).first()
+
     def get_one(self, value, flagged=False):
         self.filters.update({self.model.id: value})
         query = self.create_query(self.columns(self.queryargs.exclusions))
@@ -178,6 +186,7 @@ class BaseDAO:
                 association = item
 
         if association is not None:
+            newset = list(filter(lambda i: i.id != associated_id, getattr(base, relationship)))
             getattr(base, relationship).remove(association)
             base.save()
         return base

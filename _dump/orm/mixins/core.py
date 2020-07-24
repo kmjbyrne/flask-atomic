@@ -2,7 +2,6 @@ from flask import current_app
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-from flask_atomic.database import db
 # from flask_atomic.orm.database import db
 from flask_atomic.orm.operators import commitsession
 
@@ -57,7 +56,7 @@ class CoreMixin(object):
 
     def delete(self):
         x = current_app
-        session().delete(self)
+        session.session.delete(self)
         commitsession()
 
     def save(self, commit=True):
@@ -71,18 +70,6 @@ class CoreMixin(object):
         for attr, value in kwargs.items():
             if attr != 'id' and attr in self.fields():
                 setattr(self, attr, value)
-
-        for mtm in set(self.relationattrs()).intersection(set(kwargs.keys())):
-            model = getattr(self, mtm)
-            current = set(map(lambda rel: getattr(rel, rel.identify_primary_key()), model))
-            candidates = set(map(lambda item: list(item.values()).pop(), kwargs[mtm]))
-            for addition in candidates.difference(current):
-                association = session().query(self.__mapper__.relationships.classgroups.entity).get(addition)
-                getattr(self, mtm).append(association)
-
-            for removal in current.difference(candidates):
-                association = session().query(self.__mapper__.relationships.classgroups.entity).get(removal)
-                getattr(self, mtm).remove(association)
         self.save()
         return self
 
