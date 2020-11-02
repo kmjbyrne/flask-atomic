@@ -6,13 +6,14 @@ from flask import Blueprint
 from flask import jsonify
 from flask import request
 
-from flask_atomic.blueprint.decorators import default_decorator
 from flask_atomic.dao.base import BaseDAO
 from flask_atomic.http.exceptions import HTTPBadRequest
 from flask_atomic.http.exceptions import HTTPNotFound
 from flask_atomic.http.exceptions import HTTPConflict
 from flask_atomic.http.responses import HTTPSuccess
 from flask_atomic.orm.base import DeclarativeBase
+
+from sqlalchemy_blender.helpers import columns
 
 UUID = 'uuid'
 ACCEPTED_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
@@ -21,13 +22,10 @@ ACCEPTED_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
 class CoreBlueprint(Blueprint):
     """
     CoreBlueprint class. Extends the base Flask Blueprint class.
-
     Adds some boilerplate endpoints for GET, POST, PUT, DELETE for interacting
     with models and abstracting a lot of code away.
-
     The class is meant to be used as a soft plugin, so none of the core features
     are taken away from the base Flask Blueprint.
-
     """
 
     def __init__(self, name, module, model, dao=None, decorator=None, methods=None, url_prefix=None, lookupkey=None):
@@ -41,11 +39,11 @@ class CoreBlueprint(Blueprint):
             raise AttributeError('CoreBlueprint requires a model instance.')
 
         if decorator is None:
-            decorator = default_decorator
+            decorator = lambda x: x
         self.decorator = decorator
 
         if lookupkey is None:
-            lookupkey = model.identify_primary_key()
+            lookupkey = getattr(model, 'identify_primary_key', None)
 
         self.lookupkey = lookupkey
 
@@ -68,13 +66,10 @@ class CoreBlueprint(Blueprint):
         """
         Function for setting up the data access object (DAO) and ensuring that
         the default DAO is setup, if none provided (most common scenario).
-
         :param dao: Data access object to be assigned to this Blueprint.
         :type dao: Type[BaseDAO], optional
-
         :param model: Data access object to be assigned to this Blueprint.
         :type model: Type[DeclarativeBase]
-
         :return: Constructed data access object with model assignment
         :rtype: Type[BaseDAO]
         """
@@ -91,7 +86,6 @@ class CoreBlueprint(Blueprint):
         """
         This is the default route handler, if the endpoint regex check fails for
         other endpoints, then this will become the endpoint to use.
-
         :param path: the full path from Blueprint prefix to endpoint.
         :return:
         """
@@ -109,14 +103,13 @@ class CoreBlueprint(Blueprint):
         """
         The principal GET handler for the CoreBlueprint. All GET requests that are
         structured like so:
-        
-        `HTTP GET http://localhost:5000/api/<your-blueprint>`
 
+        `HTTP GET http://localhost:5000/api/<your-blueprint>`
         (Where your-blueprint represents a particular resource mapping).
-        
+
         Will be routed to this function. This will use the CoreBlueprints DAO
         and then fetch data for the assigned model. In this case, select all.
-        
+
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """
@@ -134,16 +127,11 @@ class CoreBlueprint(Blueprint):
         """
         The principal GET by ID handler for the CoreBlueprint. All GET requests
         that are structured like so:
-
         `HTTP GET http://localhost:5000/api/<your-blueprint>/<uuid>`
-
         (Where <your-blueprint> represents a particular resource mapping).
-
         (Where <uuid> represents an database instance ID).
-
         This will use the CoreBlueprints DAO and then fetch data for the
         assigned model. In this case, selecting only one, by UUID.
-
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """
@@ -166,21 +154,14 @@ class CoreBlueprint(Blueprint):
         """
         The principal GET.Field handler for the CoreBlueprint. All GET requests
         that are structured like so:
-
         `HTTP GET http://localhost:5000/api/<your-blueprint>/<uuid>/<some-field>`
-
             (Where <your-blueprint> represents a particular resource mapping).
-
             (Where <uuid> represents an database instance ID).
-
             (Where <your-field> represents an individual field on a model).
-
         This will use the CoreBlueprints DAO and then fetch data for the assigned
         model. In this case, selecting one, based on ID. Then it will extract
         the field specified, and return the field as a singlet object:
-
         `field->value`
-
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """
@@ -203,26 +184,18 @@ class CoreBlueprint(Blueprint):
         """
         The principal POST handler for the CoreBlueprint. All POST requests
         that are structured like so:
-
         `HTTP POST http://localhost:5000/api/<your-blueprint>`
-
         Including the POST request body:
-
         {
             **key: **value
         }
-
         Values for the model are provided in JSON format.
-
         (Where <your-blueprint> represents a particular resource mapping).
-
         This will use the CoreBlueprints DAO and then create an instance of the
         assigned model. The the function will bind this to a session, and then
         create an instance in the database.
-
         This function requires a payload, however this is not a function arg,
         rather it is an arg bound to the request object.
-
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """
@@ -243,18 +216,18 @@ class CoreBlueprint(Blueprint):
         """
         The principal DELETE handler for the CoreBlueprint. All DELETE requests
         that are structured like so:
-    
+
         `HTTP POST http://localhost:5000/api/<your-blueprint>/<uuid>`
-    
+
         (Where <your-blueprint> represents a particular resource mapping).
-    
+
         (Where <uuid> presents the database instance ID).
-    
+
         This will use the CoreBlueprints DAO and then delete the instance of the
         assigned model. The the function will bind this to a session, and then
         execute the removal instruction. By default, this removal consists of
         setting the database entry status to 'D'.
-    
+
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """
@@ -270,18 +243,18 @@ class CoreBlueprint(Blueprint):
         """
         The principal PUT handler for the CoreBlueprint. All PUT requests
         that are structured like so:
-    
+
         `HTTP POST http://localhost:5000/api/<your-blueprint>/<uuid>`
-    
+
         (Where <your-blueprint> represents a particular resource mapping).
-    
+
         (Where <uuid> presents the database instance ID).
-    
+
         This will use the CoreBlueprints DAO and then update the instance of the
         assigned model. The the function will bind this to a session, and then
         execute the update instruction. Updates will occur based on the values
         provided. The entire instance is not required.
-    
+
         :return: response object with application/json content-type preset.
         :rtype: Type[JsonResponse]
         """

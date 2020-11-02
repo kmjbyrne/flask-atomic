@@ -4,9 +4,13 @@ from sqlalchemy import DateTime
 from sqlalchemy import func
 
 
-class PrimaryKeyMixin(object):
+class PrimaryKeyMixin:
     id = Column(Integer, primary_key=True)
 
 
-class CreationTimestampMixin(object):
+class CreationTimestampMixin:
     created = Column(DateTime, default=func.now())
+
+
+class UpdateMixin:
+    updated = Column(DateTime, default=func.now())

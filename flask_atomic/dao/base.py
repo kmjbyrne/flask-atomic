@@ -6,6 +6,7 @@ import sqlalchemy
 
 from flask import current_app
 from flask import request
+from sqlalchemy_blender.helpers import columns
 
 from flask_atomic.dao.buffer.data import DataBuffer
 from flask_atomic.dao.buffer.query import QueryBuffer
@@ -19,7 +20,9 @@ class BaseDAO:
         self.json = True
         self.exclusions = list()
         self.rels: bool = False
-        self.sortkey: None = getattr(model, model.identify_primary_key())
+        self.sortkey = None
+        if getattr(model, 'identify_primary_key', None):
+            self.sortkey = model.identify_primary_key()
         self.descending: bool = False
         # TODO Break out this code to a class and encapsulate mapping a little better
         self.filters = {}
@@ -66,7 +69,7 @@ class BaseDAO:
         if not exclusions:
             exclusions = set()
         includes = []
-        for item in self.model.objectcolumns(False):
+        for item in columns(self.model):
             comp = item
             if not isinstance(comp, str):
                 comp = item.key
@@ -102,7 +105,7 @@ class BaseDAO:
         return None
 
     def create_query(self, fields=None, flagged=False):
-        return self.model.makequery(fields)
+        return self.model.query
 
     def query(self, noauto=False):
         query = self.create_query()

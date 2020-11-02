@@ -1,5 +1,3 @@
-from flask import jsonify
-
 
 class BaseHTTPResponse:
     message: str = ''
@@ -10,8 +8,8 @@ class BaseHTTPResponse:
         if kwargs.get('pack', False):
             return cls
         if len(args):
-            return jsonify(data=args[0], **kwargs), cls.code
-        return jsonify(message=message, **kwargs), cls.code
+            return dict(data=args[0], message=message, **kwargs), cls.code
+        return dict(message=message, **kwargs), cls.code
 
 
 class HTTPSuccess(BaseHTTPResponse):

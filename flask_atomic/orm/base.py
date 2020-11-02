@@ -79,7 +79,6 @@ class DeclarativeBase(db.Model, CoreMixin):
                 return cls.query
             return db.session.query(cls, *fields)
         except Exception as e:
-            logger.error(str(e))
             db.session.rollback()
         return db.session.query(cls, *fields)
 

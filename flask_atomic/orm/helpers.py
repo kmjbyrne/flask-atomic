@@ -2,12 +2,16 @@ from typing import Optional
 from datetime import datetime
 from datetime import date
 
+from sqlalchemy import util
+
 
 def relationships(model):
     return model.__mapper__.relationships
 
 
 def columns(model, strformat=False, relations=None):
+    if not model:
+        return None
     bound_columns = set(model.__mapper__.columns)
     if relations:
         return bound_columns.union(set([i.class_attribute for i in model.__mapper__.relationships]))
@@ -33,13 +37,15 @@ def getschema(model):
 
 def extract(element, fields=None, exclude: Optional[set] = None, **kwargs) -> dict:
     resp = dict()
+    if element is None:
+        return {}
     if exclude is None:
         exclude = set()
 
     if fields is None:
         fields = columns(element, strformat=True)
 
-    for column in set(fields).difference(set(exclude)):
+    for column in set(fields or []).difference(set(exclude)):
         if isinstance(getattr(element, column), datetime) or isinstance(getattr(element, column), date):
             resp[column] = str(getattr(element, column))
         else:
@@ -54,6 +60,8 @@ def process_relationship(data, exclude):
         for item in data:
             resp.append(extract(item, columns(item, strformat=True), exclude))
         return resp
+    else:
+        resp = extract(data, columns(data, strformat=True), exclude)
     return resp
 
 
@@ -99,16 +107,32 @@ def serialize(model, data, fields=None, exc: Optional[set] = None, rels=None, ro
     fields = fields.difference(exclude)
 
     def process(element):
+        if getattr(element, '_fields', None):
+            transformed = {}
+            for idx, field in enumerate(element._fields):
+                transformed[field] = element[idx]
+            return transformed
+
         transformed = extract(element, fields, set(), **kwargs)
         if functions:
             for key, value in functions.items():
                 transformed[f'_{key}'] = value(getattr(element, key))
         # rels = set([i.key for i in element.__mapper__.relationships]).intersection(fields)
-        if not rels or len(([i.key for i in element.__mapper__.relationships])) < 1:
-            return transformed
 
-        for item in rels:
-            transformed[item] = process_relationship(getattr(element, item), exclude=exclude)
+        for item in rels or []:
+            if '.' in item:
+                left, right = item.split('.')
+                _ = process_relationship(getattr(element, left), exclude)
+
+                for idx, i in enumerate(getattr(element, left)):
+                    _[idx][right] = extract(getattr(i, right))
+                transformed[left] = _
+                continue
+
+            rel = None
+            if getattr(element, item):
+                rel = process_relationship(getattr(element, item), exclude)
+            transformed[item] = rel
         return transformed
 
     if root is None:

@@ -1,7 +1,8 @@
 QUERYSTRING_ARGUMENT_MAP = {
     'true': True,
     'false': False,
-    'default': None
+    'default': None,
+    'null': None
 }
 
 QUERYSTRING_CONTROL_KEYS = [
@@ -56,6 +57,10 @@ class QueryStringProcessor:
             else:
                 # Then this value filter is enabled
                 self.filters[key] = value
+
+        for item, value in self.filters.items():
+            if ',' in value:
+                setattr(self, 'filterin', {item: self.filters.get(item).split(',')})
 
         rels = self.querystring.get('relationships', None)
         if rels and rels not in ['false', 'N', 'no', 'No', '0']:

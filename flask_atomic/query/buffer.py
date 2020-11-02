@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 from flask import request
+from flask import current_app
 from flask_sqlalchemy import BaseQuery
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
@@ -8,8 +9,10 @@ from flask_atomic.orm.base import DeclarativeBase
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import load_only
 from sqlalchemy import desc
+from sqlalchemy_abc.helpers import related
+from sqlalchemy_abc.database import db
 
-from ..database import db
+
 from .processor import QueryStringProcessor
 from ..orm.helpers import serialize
 from ..orm.helpers import relationships
@@ -21,12 +24,13 @@ from ..http.exceptions import HTTPBadRequest
 class QueryBuffer:
     ACCEPTED_CALLS = ['all', 'count']
 
-    def __init__(self, model, queryargs=None, auto=True):
+    def __init__(self, model, queryargs=None, auto=True, session=None):
+        self.session = current_app.extensions['sqlalchemy'].db.session
         if not queryargs:
             queryargs = QueryStringProcessor(dict(request.args))
 
         if isinstance(model, DeclarativeMeta):
-            query = db.session.query(model)
+            query = self.session.query(model)
             self.basequery: BaseQuery = query
             self._basequery: BaseQuery = query
         else:
@@ -61,7 +65,6 @@ class QueryBuffer:
 
     def check_key(self, key: str) -> bool:
         _key = key.split('.')
-
         for item in relationships(self.model):
             try:
                 if _key[0] in [i.name for i in getattr(self.model, item).prop.target.columns]:
@@ -69,6 +72,15 @@ class QueryBuffer:
             except Exception:
                 continue
         return _key[0] in relationships(self.model)
+
+    def prepare_query(self, fields):
+        if not fields:
+            self.basequery = self.session.query(self.model)
+            return self.basequery
+        select = [getattr(self.model, _field) for _field in fields]
+        query = self.session.query(*select)
+        self.basequery = query
+        return self.basequery
 
     def apply(self, pending=False, inactive=False):
         entity = self.basequery._entity_zero()
@@ -81,7 +93,7 @@ class QueryBuffer:
         if self.queryargs.include:
             fields = set()
             for item in self.queryargs.include:
-                if item not in base_fields:
+                if not {item}.issubset(base_fields):
                     raise HTTPBadRequest('{} is not a recognised attribute of this resource'.format(item))
                 fields.add(item)
             self.fields = fields
@@ -105,9 +117,11 @@ class QueryBuffer:
         if not self.queryargs.sortkey or self.queryargs.sortkey == '':
             self.queryargs.sortkey = entity.primary_key[0].name
 
+        self.prepare_query(self.queryargs.include)
+
         if self.queryargs.sortkey in keys:
             column = getattr(self.basequery._entity_zero().attrs, self.queryargs.sortkey)
-            if self.queryargs.descending and self.queryargs.sortkey in self.model.keys():
+            if self.queryargs.descending and self.queryargs.sortkey in columns(self.model, strformat=True):
                 self.basequery = self.basequery.order_by(desc(column))
             else:
                 self.basequery = self.basequery.order_by(column)
@@ -115,14 +129,27 @@ class QueryBuffer:
         filters = self.queryargs.filters
         self.basequery, filters = self.check_relationship_filtering(self.basequery, filters)
 
+        setfilters = []
+
+        if getattr(self.queryargs, 'filterin', None):
+            for key, search in getattr(self.queryargs, 'filterin').items():
+                setfilters.append(getattr(self.model, key).in_(search))
+                del filters[key]
+                # self.basequery = self.basequery.filter(getattr(self.model, key).in_(search))
+
         # filters = tuple(filter(lambda k: '.' not in k, filters.keys()))
 
         if 'active' in keys:
             if pending:
                 self.flags.append('P')
+                self.flags.append('C')
             if inactive:
                 self.flags.append('N')
-            self.basequery = self.set_active_filter(self.basequery, self.flags)
+            self.flags.append('C')
+            setfilters.append(getattr(self.model, 'active').in_(self.flags))
+            # self.basequery = self.set_active_filter(self.basequery, self.flags)
+
+        self.basequery = self.basequery.filter(*setfilters)
 
         try:
             self.basequery = self.basequery.filter_by(**filters)
@@ -132,6 +159,9 @@ class QueryBuffer:
         for key, value in self.queryargs.max:
             self.basequery = self.basequery.filter(getattr(self.model, key) <= value)
 
+        for key, value in self.queryargs.min:
+            self.basequery = self.basequery.filter(getattr(self.model, key) >= value)
+
         if self.queryargs.page:
             self.pagedquery = self.basequery.paginate(self.queryargs.page, self.queryargs.pagesize or 50, False)
             self.paginated = True
@@ -140,7 +170,7 @@ class QueryBuffer:
         default_field = getattr(self.model, self.model.__mapper__.primary_key[0].name)
         self.basequery = self.basequery.group_by(default_field)
         self.basequery = self.basequery.limit(self.queryargs.limit)
-        self.basequery = self.basequery.options(load_only(*self.fields))
+        # self.basequery = self.basequery.options(load_only(*self.fields))
         return self
 
     def set_active_filter(self, query, flags):
@@ -159,23 +189,37 @@ class QueryBuffer:
                 del _filters[item]
         return query, _filters
 
-    def all(self):
+    def all(self, counts=True):
         if self.paginated:
             self.data = self.pagedquery.items
             self.count = getattr(self.basequery, 'count')()
             return self
             # raise ValueError('Cannot run all on a paginated query object')
         self.data = self.basequery.all()
+
+        if counts:
+            for idx, item in enumerate(self.data):
+                rels = related(item)
+                counts = {}
+                for rel in rels:
+                    field = getattr(rel, item.__tablename__, None)
+                    if not field:
+                        continue
+                    resp = rel.query.filter(field.expression.right == item.id).count()
+                    counts[rel.__tablename__] = resp
+                setattr(self.data[idx], '__counts__', counts)
         self.count = len(self.data)
         return self
 
+
     def one(self, field, value):
         filter_expression = {field: value}
-        query = self.model.query.filter_by(**filter_expression)
+        self.prepare_query(self.queryargs.include)
+        query = self.basequery.filter_by(**filter_expression)
         self.data = query.first()
         if not self.data:
             raise HTTPNotFound(f'{str(self.model.__dict__.get("__tablename__"))} not found!')
-        for item in relationships(self.model):
+        for item in set([str(i.key) for i in relationships(self.model)]).intersection(self.queryargs.include):
             _item = item
             if not isinstance(_item, str):
                 _item = str(item).split('.').pop()

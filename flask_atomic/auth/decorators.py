@@ -13,5 +13,5 @@ def check_request_token(func):
             return jsonify(message='Token is invalid', code=403), 403
         # g.user = auth_token.get('user')
         return func(*args, **kwargs)
-
     return decorated
+

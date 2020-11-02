@@ -3,16 +3,15 @@ from flask import current_app
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
+from sqlalchemy_blender.database import db
 from flask_atomic.builder.dao import ModelDAO
-from flask_atomic.orm.base import DeclarativeBase
-from flask_atomic.orm.database import db
 from flask_atomic.orm.mixins.columns import CreationTimestampMixin
 from flask_atomic.orm.mixins.columns import PrimaryKeyMixin
 
 PASSWORD_MIN = 8
 
 
-class BaseUser(DeclarativeBase, PrimaryKeyMixin, CreationTimestampMixin):
+class BaseUser(PrimaryKeyMixin, CreationTimestampMixin, db.Model):
     __abstract__ = True
     username = db.Column(db.String(120), nullable=True, unique=True)
     forename = db.Column(db.String(120))
@@ -23,12 +22,24 @@ class BaseUser(DeclarativeBase, PrimaryKeyMixin, CreationTimestampMixin):
     def name(self):
         return '{} {}'.format(self.forename, self.surname)
 
+    def check_user_password(self, password):
+        """
+        Takes a plain text password, then perform a decrypted password check.
+        :param password: Plain text password input
+        :return: True or False whether password is valid
+        :rtype: bool
+        """
+
+        if check_password_hash(self.password, password):
+            return True
+        return False
+
 
 class UserDAO(ModelDAO):
     json = False
 
     def __init__(self, model=BaseUser):
-        super().__init__()
+        super().__init__(model)
         self.user = None
         self.model = model
 
