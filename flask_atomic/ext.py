@@ -33,7 +33,9 @@ class JSONResponse(Response):
         if isinstance(rv, dict):
             rv = jsonify(rv)
         elif isinstance(rv, tuple):
-            rv = jsonify(rv[0]), rv[1]
+            rv = jsonify(rv[0])
+        elif isinstance(rv, datetime):
+            rv = jsonify(rv.isoformat())
         return super(JSONResponse, cls).force_type(rv, environ)
 
 
