@@ -21,4 +21,6 @@ Installation
 
 From the PyPi repository
 
-`pip install Flask-Atomic`
+    .. code-block::
+
+        pip install Flask-Atomic
