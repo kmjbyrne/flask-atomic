@@ -1,32 +1,38 @@
 import secrets
 
+from collections.abc import Iterable
+
+from flask import Flask
 from flask import Blueprint
 from flask import request
 
-
-from handyhttp import HTTPSuccess
-from handyhttp import HTTPCreated
-from handyhttp import HTTPDeleted
-from handyhttp import HTTPSuccess
-from handyhttp import HTTPBadRequest
-from handyhttp import HTTPException
-from handyhttp import HTTPNotFound
-
-from sqlalchemy_blender import serialize
-from sqlalchemy_blender import iserialize
 from sqlalchemy_blender import QueryBuffer
 from sqlalchemy_blender.helpers import related
+from sqlalchemy_blender.helpers import serialize
+from sqlalchemy_blender.helpers import iserialize
 from sqlalchemy_blender.helpers import columns
+from sqlalchemy_blender.helpers import getschema
 from sqlalchemy_blender.dao import ModelDAO
 
+from handyhttp.responses import HTTPSuccess
+from handyhttp.responses import HTTPCreated
+from handyhttp.responses import HTTPUpdated
+from handyhttp.responses import HTTPDeleted
+from handyhttp.exceptions import HTTPConflict
+from handyhttp.exceptions import HTTPNotFound
+from handyhttp.exceptions import HTTPBadRequest
+from handyhttp.exceptions import HTTPException
 
-from .cache import link
-from . import cache
+from flask_atomic.builder.cache import link
+from flask_atomic.builder import cache
 
 
-def bind(blueprint, instance, methods, tenant=None):
+DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']
+
+
+def bind(blueprint, routes, methods, prefix=None):
     for key in cache.ROUTE_TABLE.keys():
-        endpoint = getattr(instance, key, None)
+        endpoint = getattr(routes, key, None)
         if not endpoint:
             continue
         view_function = endpoint
@@ -37,42 +43,46 @@ def bind(blueprint, instance, methods, tenant=None):
                 view_function = view_function(dec)
             view_function = view_function(endpoint)
 
-        for item in cache.ROUTE_TABLE[endpoint.__name__]:
+        for idx, item in enumerate(cache.ROUTE_TABLE[endpoint.__name__]):
             if item[1][0] in methods:
                 url = item[0]
-                new_rule = f'/{instance.model.__tablename__}/{url.split("/").pop()}'
-                new_rule_with_slash = new_rule = f'/{instance.model.__tablename__}{url}'
+                new_rule = url.rstrip('/')
+                new_rule_with_slash = '{}/'.format(new_rule)
 
-                if new_rule.endswith('/'):
-                    new_rule = new_rule[:-1]
-
-                if not new_rule_with_slash.endswith('/'):
-                    new_rule_with_slash = f'{new_rule_with_slash}/'
+                if prefix:
+                    new_rule = f'{prefix}{new_rule}'
+                    new_rule_with_slash = f'{prefix}{new_rule_with_slash}'
 
                 allowed_methods = item[1]
-                name = f'{endpoint.__name__}_{instance.model.__tablename__}'
+                name = f'{prefix}-{idx}-{endpoint.__name__}'
                 blueprint.add_url_rule(new_rule, name, view_function, methods=allowed_methods)
-                blueprint.add_url_rule(new_rule_with_slash, name, view_function, methods=allowed_methods)
+                blueprint.add_url_rule(new_rule_with_slash, f'{name}_slash', view_function, methods=allowed_methods)
     return blueprint
 
 
-class MultiModelBuilder(Blueprint):
+class Architect(Blueprint):
 
-    def __init__(self, models, prefix=None, decorators=None, dao=None, **kwargs):
+    def __init__(self, models, decorators=None, dao=None, **kwargs):
         super().__init__(
+            f'blueprint-{secrets.token_urlsafe()}',
             __name__,
-            f'public-access-blueprint-{secrets.token_urlsafe()}'
         )
         self.decorators = decorators
+
+        if not isinstance(models, Iterable):
+            models = [models]
+
         self.models = models
+        self.override = None
         self.key = None
         self.tenant = None
         self.dao = dao
+        self.throw = True
         self.binds = []
         self.methods = ['GET', 'POST', 'PUT', 'DELETE']
 
-        if prefix:
-            self.url_prefix = prefix
+        if kwargs.get('prefix', None):
+            self.url_prefix = kwargs.get('prefix', None)
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -82,15 +92,14 @@ class MultiModelBuilder(Blueprint):
             if decorators:
                 self.decorators = [self.decorators]
 
+    def link(self, app: Flask):
         self.prepare()
-
-    # def set_local_error_handler(self):
-    #     @self.app_errorhandler(Exception)
-    #     def errors(error=None):
-    #         if isinstance(error, HTTPException):
-    #             raise error
-    #         raise error
-    #     self.app_errorhandler(Exception)(errors)
+        @self.errorhandler(Exception)
+        def catch_error(exception):
+            if isinstance(exception, HTTPException):
+                return exception.pack()
+            raise exception
+        app.register_blueprint(self)
 
     def extract_config_override(self, config):
         new_config = [config, self.dao, self.key]
@@ -102,29 +111,48 @@ class MultiModelBuilder(Blueprint):
     def prepare(self):
         # first cycle through each of the assigned models
         for item in self.models:
+            routes: Routes
+            primary = item.__mapper__.primary_key[0].name
             # then create route assignments as per global control
             # TODO: Extend to individual control configuration also
             if isinstance(item, dict):
                 config = self.extract_config_override(item)
                 routes = Routes(*config)
             else:
-                routes = Routes(item, self.dao, self.key)
-            bind(self, routes, self.methods)
+                routes = Routes(item, self.dao, self.key or primary, response=self.response)
+            prefix = f'{item.__tablename__}'
+            if len(self.models) == 1:
+                prefix = ''
+            bind(self, routes, self.methods, prefix=prefix)
 
-        # self.set_local_error_handler()
+    def error_handler(self, exception):
+        return exception.pack()
+
+    def response(self, response):
+        return response
+
+    def exception(self, exception):
+        if self.exception:
+            return self.exception(exception)
+        if self.throw:
+            raise exception
+        return exception
 
 
 class Routes:
 
-    def __init__(self, model, dao, key):
+    def __init__(self, model, dao, key, throw=True, response=None, exception=None):
         self.model = model
         self.dao = dao
         self.key = key
+        self.throw = throw
+        self.response = response
+        self.exception = exception
 
     def json(self, data, *args, **kwargs):
         return iserialize(data, **kwargs)
 
-    @link(url='/', methods=['GET'])
+    @link(url='', methods=['GET'])
     def get(self, *args, **kwargs):
         """
         The principal GET handler for the RouteBuilder. All GET requests that are
@@ -141,10 +169,17 @@ class Routes:
         :rtype: HTTPSuccess
         """
 
-        # self.querystring()
-        rels = related(self.model)
         query = QueryBuffer(self.model).all()
-        return HTTPSuccess(self.json(query.data, **query.queryargs.__dict__))
+        return self.response(HTTPSuccess(self.json(query.data, **query.queryargs.__dict__)))
+
+    @link(url='/<resource>', methods=['HEAD'])
+    def head(self, resource):
+        query = QueryBuffer(self.model)
+        resp = query.one(self.key, resource)
+
+        if not resp:
+            return self.exception(HTTPNotFound())
+        return HTTPSuccess()
 
     @link(url='/<resource>', methods=['GET'])
     def one(self, resource, *args, **kwargs):
@@ -169,35 +204,41 @@ class Routes:
             resource = resource.split('/').pop(0)
 
         query = QueryBuffer(self.model)
-        resp = query.get(resource, self.key)
+        resp = query.one(self.key, resource)
 
         if not resp:
-            raise HTTPNotFound()
+            return self.exception(HTTPNotFound())
 
-        return HTTPSuccess(self.json(resp, **query.queryargs.__dict__))
+        return self.response(HTTPSuccess(self.json(query.data, **query.queryargs.__dict__)))
 
-    @link(url='/<path:modelid>/<path:resource>', methods=['GET'])
-    def one_child_resource(self, modelid, resource, *args, **kwargs):
-        query = QueryBuffer(self.model, auto=False).one(self.key, modelid)
-        modeltree = resource.split('/')
+    @link(url='/<resource>/<string:field>', methods=['GET'])
+    def one_child_resource(self, resource, field, *args, **kwargs):
+        query = QueryBuffer(self.model, auto=False).one(self.key, resource)
+        instance = query.one(self.key, resource).data
+        path = field.split('/')
+        prop = None
 
-        if len(modeltree):
+        if not instance:
+            return self.exception(HTTPNotFound())
+
+        if len(path) > 1:
+            child = None
             data = query.data
-            for item in modeltree:
+            endpoint = path.pop()
+            for idx, item in enumerate(path):
                 if isinstance(data, int) or isinstance(data, str):
                     raise HTTPBadRequest(msg='Cannot query this data type')
                 if isinstance(data, list):
-                    data = data[int(item)]
+                    child = data[int(item)]
                 else:
-                    data = getattr(data, item)
+                    child = getattr(instance, item)
+            data = getattr(child, endpoint)
+            prop = endpoint
+        else:
+            prop = field
+            data = getattr(instance, field)
 
-        if resource in columns(self.model, strformat=True):
-            return HTTPSuccess({resource: getattr(query.data, resource)})
-        child = getattr(self.model, resource).comparator.entity.class_
-        return HTTPSuccess(
-            self.json(QueryBuffer(child, auto=False).query.join(self.model.articles).all(), **query.queryargs.__dict__),
-            __parent=self.json(query.data, **query.queryargs.__dict__)
-        )
+        return HTTPSuccess({prop: data}, path=field.split('/'))
 
     @link(url='/', methods=['POST'])
     def post(self, *args, **kwargs):

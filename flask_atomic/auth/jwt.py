@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import jwt
 
+from flask import current_app
 from flask import request
 
 
@@ -23,7 +24,10 @@ def encode_auth_token(user_id, secret_key, expiry=12, algorithm='HS256'):
         return e
 
 
-def decode_auth_token(auth_token, secret_key):
+def decode_auth_token(auth_token, secret_key=None):
+    if not secret_key and not current_app.config.get('SECRET_KEY', None):
+        raise AttributeError('Decoding requires an application SECRET_KEY')
+
     try:
         payload = jwt.decode(auth_token, secret_key)
         return {

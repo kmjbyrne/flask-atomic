@@ -121,6 +121,7 @@ class BuilderCore:
         blueprint.bind(methods)
         # build out routes for this model
         self.blueprint = blueprint
+        return blueprint
         # if app:
         #     app.register_blueprint(blueprint, url_prefix=self.define_prefix(model))
 
@@ -143,26 +144,16 @@ class BuilderCore:
                 dao = model[1].get('dao', None)
                 model = model[0]
 
-            self.register_methods(model, application, methods, dao)
-            continue
-
-            blueprint = RouteBuilder(
-                model.__tablename__,
-                __name__, model,
-                self.decorators,
-                dao=dao,
-                lookup=self.lookup,
-                tenant=self.tenant
-            )
-
-            if delete:
-                blueprint.set_soft_delete(delete)
-            blueprint.bind(methods)
-            # build out routes for this model
+            blueprint = self.register_methods(model, application, methods, dao)
+            blueprint.strict_slashes = False
             application.register_blueprint(blueprint, url_prefix=self.prefix)
 
     def init_app(self, application: Flask):
         self.models = current_app.config.get('ATOMIC_MODELS', None)
+        application.teardown_appcontext(self.teardown)
+        self.bind(application)
+
+    def register(self, application: Flask):
         application.teardown_appcontext(self.teardown)
         self.bind(application)
 

@@ -13,6 +13,8 @@ from handyhttp.responses import HTTPSuccess
 from handyhttp.responses import HTTPCreated
 from handyhttp.responses import HTTPUpdated
 from handyhttp.responses import HTTPDeleted
+from handyhttp.exceptions import HTTPConflict
+from handyhttp.exceptions import HTTPNotFound
 
 from .cache import link
 from . import cache
@@ -105,7 +107,7 @@ class RouteBuilder(Blueprint):
             relations = queryargs.rels
         return serialize(self.model, data, rels=relations)
 
-    @link(url='/', methods=['GET'])
+    @link(url='', methods=['GET'])
     def get(self, *args, **kwargs):
         """
         The principal GET handler for the RouteBuilder. All GET requests that are
@@ -122,15 +124,12 @@ class RouteBuilder(Blueprint):
         :rtype: HTTPSuccess
         """
 
-        # self.querystring()
-        rels = related(self.model)
         query = QueryBuffer(self.model).all()
         schema = getschema(self.model)
         return HTTPSuccess(self.json(query.data, queryargs=query.queryargs), schema=schema)
 
-    @link(url='/<int:modelid>', methods=['GET'])
-    @link(url='/<path:modelid>', methods=['GET'])
-    def one(self, modelid, *args, **kwargs):
+    @link(url='/<resource>', methods=['GET'])
+    def one(self, resource, *args, **kwargs):
         """
         The principal GET by ID handler for the RouteBuilder. All GET requests
         that are structured like so:
@@ -148,14 +147,19 @@ class RouteBuilder(Blueprint):
         :rtype: Type[JsonResponse]
         """
 
+        if resource == self.model.__tablename__:
+            return self.get(*args, **kwargs)
+
         query = QueryBuffer(self.model)
-        data = query.get(modelid, self.key)
+        data = query.get(resource, self.key)
+        if not data:
+            return HTTPNotFound().pack()
         return HTTPSuccess(serialize(self.model, data, rels=query.queryargs.rels))
 
-    @link(url='/<int:modelid>/<path:resource>', methods=['GET'])
-    def one_child_resource(self, modelid, resource, *args, **kwargs):
-        query = QueryBuffer(self.model, auto=False).one(self.key, modelid)
-        modeltree = resource.split('/')
+    @link(url='/<int:resource>/<path:field>', methods=['GET'])
+    def one_child_resource(self, resource, field, *args, **kwargs):
+        query = QueryBuffer(self.model, auto=False).one(self.key, resource)
+        modeltree = field.split('/')
 
         if len(modeltree):
             data = query.data
@@ -175,7 +179,7 @@ class RouteBuilder(Blueprint):
         try:
             instance = self.dao.create(self._payload(), **kwargs)
         except Exception as exc:
-            raise ValueError(str(exc))
+            raise HTTPConflict(str(exc))
         return HTTPCreated(self.json(instance))
 
     @link(url='/<int:modelid>/<resource>/', methods=['POST'])

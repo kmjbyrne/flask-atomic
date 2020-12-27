@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='Flask-Atomic',
-    version='0.0.45',
+    version='0.1.0',
     description='Core code for Flask based projects',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -25,7 +25,7 @@ setup(
         'markdown',
     ],
     test_suite='nose.collector',
-    tests_require=['nose', 'nose-cover3'],
+    tests_require=['nose', 'nose-cover3', 'coverage'],
     include_package_data=True,
     zip_safe=False
 )

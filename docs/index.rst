@@ -4,7 +4,7 @@ Flask Atomic
 REST API development should be quick and painless, especially when prototyping
 or working with large amounts of models where boilerplate CRUD operations are
 required. With well-defined code, Flask Atomic has the opportunity to render
-redundant ~500 lines of per code, per every 5 models in a project.
+potentially hundreds of lines of redundant.
 
 This project was heavily influenced by repetitive efforts to get quick and dirty
 APIs up and running, with the bad practice of re-using a lot of code, over and over
