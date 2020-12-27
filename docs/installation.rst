@@ -19,7 +19,9 @@ Quickstart
 Installation
 ------------
 
-From the PyPi repository `pip install Flask-Atomic`
+From the PyPi repository
+
+`pip install Flask-Atomic`
 
 Minimal Example
 ---------------

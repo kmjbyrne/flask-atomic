@@ -12,9 +12,6 @@ again. Instead of relying on throwaway efforts, Flask Atomic provides a very
 simply means to abstract away hundreds of lines of code and enable RESTful API best
 practices that are often esoteric and difficult to engineer for small projects.
 
-Not only does it enable significant off-shelf functionality, it is thoroughly
-tested and battle-hardened for development needs.
-
 This project intended to be a building block to enrich the Flask ecosystem,
 without compromising any Flask functionality. Leaving you to integrate without
 issues, breathing life into your projects in less than 5 lines of code. Feature
@@ -33,7 +30,7 @@ The Flask Atomic package can be used for:
 
 
 .. toctree::
-    quickstart
+    installation
 
 
 
