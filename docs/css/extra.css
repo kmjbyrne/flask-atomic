@@ -1,0 +1,5 @@
+/* docs/css/extra.css */
+
+code, .rst-content tt, .rst-content code {
+  white-space: pre;
+}

@@ -1,10 +1,6 @@
-import secrets
-
-from flask import current_app
 from flask import Flask
 from flask import Blueprint
 
-from .routes import RouteBuilder
 
 DEFAULT_METHOD_SET = ['GET', 'POST', 'PUT', 'DELETE']
 
@@ -67,95 +63,3 @@ class AtomViews:
     def register(cls, app):
         instance = cls(app)
         instance.bind()
-
-
-class BuilderCore:
-
-    def __init__(self, app=None, decorators=None, prefix=None, session=None, tenant=None, lookup=None, **kwargs):
-        self.application = app
-        self.decorators = decorators
-        self.prefix = prefix
-        self.session = session
-        self.tenant = tenant
-        self.lookup = lookup
-        self.model = kwargs.get('model', None)
-        self.models = kwargs.get('models', None)
-        self.methods = kwargs.get('methods', None)
-        self.blueprint = None
-
-        for item in {'model', 'models', 'methods', 'dao', 'session', 'prefix'}:
-            if item in kwargs:
-                del kwargs[item]
-
-        self.kwargs = kwargs
-
-        if not self.methods:
-            self.methods = DEFAULT_METHOD_SET
-
-        self.name = None
-        if kwargs.get('name', None):
-            self.name = kwargs.get('name')
-            del kwargs['name']
-            self.app = Blueprint(__name__, f'{self.name}-extra')
-
-        if app is not None:
-            self.init_app(app)
-
-        # if self.model:
-        #     self.register_methods(self.model, app, self.methods)
-
-    def define_prefix(self, model):
-        return f'{self.prefix or ""}/{model.__tablename__}'
-
-    def register_methods(self, model, app, methods, dao=None):
-        blueprint = RouteBuilder(
-            self.name or model.__tablename__,
-            __name__,
-            model,
-            self.decorators,
-            dao=dao,
-            lookup=self.lookup,
-            tenant=self.tenant,
-            **self.kwargs
-        )
-        blueprint.bind(methods)
-        # build out routes for this model
-        self.blueprint = blueprint
-        return blueprint
-        # if app:
-        #     app.register_blueprint(blueprint, url_prefix=self.define_prefix(model))
-
-    def bind(self, application: Flask):
-        if self.model:
-            self.register_methods(self.model, application, self.methods)
-            application.register_blueprint(self.blueprint, url_prefix=self.define_prefix(self.model))
-            return self
-
-        for model in self.models or []:
-            methods = DEFAULT_METHOD_SET
-            delete = True
-
-            dao = None
-            if isinstance(model, tuple):
-                methods = model[1].get('methods')
-                if not methods:
-                    methods = ['GET', 'POST', 'PUT', 'DELETE']
-                delete = model[1].get('delete')
-                dao = model[1].get('dao', None)
-                model = model[0]
-
-            blueprint = self.register_methods(model, application, methods, dao)
-            blueprint.strict_slashes = False
-            application.register_blueprint(blueprint, url_prefix=self.prefix)
-
-    def init_app(self, application: Flask):
-        self.models = current_app.config.get('ATOMIC_MODELS', None)
-        application.teardown_appcontext(self.teardown)
-        self.bind(application)
-
-    def register(self, application: Flask):
-        application.teardown_appcontext(self.teardown)
-        self.bind(application)
-
-    def teardown(self, exc):
-        self.models = set()

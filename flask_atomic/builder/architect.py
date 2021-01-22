@@ -1,31 +1,20 @@
 import secrets
+import logging
 
 from collections.abc import Iterable
 
 from flask import Flask
 from flask import Blueprint
 from flask import request
-
-from sqlalchemy_blender import QueryBuffer
-from sqlalchemy_blender.helpers import related
-from sqlalchemy_blender.helpers import serialize
-from sqlalchemy_blender.helpers import iserialize
-from sqlalchemy_blender.helpers import columns
-from sqlalchemy_blender.helpers import getschema
+from flask_atomic.builder import cache
 from sqlalchemy_blender.dao import ModelDAO
-
-from handyhttp.responses import HTTPSuccess
-from handyhttp.responses import HTTPCreated
-from handyhttp.responses import HTTPUpdated
-from handyhttp.responses import HTTPDeleted
-from handyhttp.exceptions import HTTPConflict
-from handyhttp.exceptions import HTTPNotFound
-from handyhttp.exceptions import HTTPBadRequest
 from handyhttp.exceptions import HTTPException
 
-from flask_atomic.builder.cache import link
-from flask_atomic.builder import cache
+from .endpoints import Routes
 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']
 
@@ -62,7 +51,7 @@ def bind(blueprint, routes, methods, prefix=None):
 
 class Architect(Blueprint):
 
-    def __init__(self, models, decorators=None, dao=None, **kwargs):
+    def __init__(self, models, decorators=None, dao=ModelDAO, **kwargs):
         super().__init__(
             f'blueprint-{secrets.token_urlsafe()}',
             __name__,
@@ -74,12 +63,17 @@ class Architect(Blueprint):
 
         self.models = models
         self.override = None
-        self.key = None
+        self.key = kwargs.get('lookup', None)
         self.tenant = None
         self.dao = dao
-        self.throw = True
+        self.throw = False
         self.binds = []
+        self.logging = True
+        self.pre = False
+        self.errors = True
+        self.suffix = True
         self.methods = ['GET', 'POST', 'PUT', 'DELETE']
+        self.static_url_path = None
 
         if kwargs.get('prefix', None):
             self.url_prefix = kwargs.get('prefix', None)
@@ -94,36 +88,55 @@ class Architect(Blueprint):
 
     def link(self, app: Flask):
         self.prepare()
-        @self.errorhandler(Exception)
-        def catch_error(exception):
-            if isinstance(exception, HTTPException):
-                return exception.pack()
-            raise exception
+
+        if self.errors:
+            @self.errorhandler(Exception)
+            def catch_error(exception):
+                if self.throw:
+                    raise exception
+                if isinstance(exception, HTTPException):
+                    return exception.pack()
+                raise exception
+
+        @self.before_request
+        def preprocess(*args, **kwargs):
+            if self.pre:
+                getattr(self, 'pre')()
+            self.log()
+
         app.register_blueprint(self)
 
     def extract_config_override(self, config):
-        new_config = [config, self.dao, self.key]
-        for idx, item in enumerate(['model', 'key', 'dao']):
+        new_config = [config, self.dao, self.key, []]
+        for idx, item in enumerate(['model', 'dao', 'key', 'methods']):
             if item in config:
                 new_config[idx] = config.get(item)
         return new_config
+
+    def log(self, log=None):
+        if self.logging:
+            if not log:
+                logger.info(request.base_url)
 
     def prepare(self):
         # first cycle through each of the assigned models
         for item in self.models:
             routes: Routes
-            primary = item.__mapper__.primary_key[0].name
+            methods = self.methods
             # then create route assignments as per global control
             # TODO: Extend to individual control configuration also
             if isinstance(item, dict):
                 config = self.extract_config_override(item)
-                routes = Routes(*config)
+                routes = Routes(*config, response=self.response)
+                prefix = f'{item.get("model").__tablename__}'
+                methods = item.get('methods', None) or self.methods
             else:
-                routes = Routes(item, self.dao, self.key or primary, response=self.response)
-            prefix = f'{item.__tablename__}'
-            if len(self.models) == 1:
+                primary = item.__mapper__.primary_key[0].name
+                routes = Routes(item, self.dao(item), self.key or primary, response=self.response)
+                prefix = f'{item.__tablename__}'
+            if len(self.models) == 1 and not self.suffix:
                 prefix = ''
-            bind(self, routes, self.methods, prefix=prefix)
+            bind(self, routes, methods, prefix=prefix)
 
     def error_handler(self, exception):
         return exception.pack()
@@ -137,138 +150,3 @@ class Architect(Blueprint):
         if self.throw:
             raise exception
         return exception
-
-
-class Routes:
-
-    def __init__(self, model, dao, key, throw=True, response=None, exception=None):
-        self.model = model
-        self.dao = dao
-        self.key = key
-        self.throw = throw
-        self.response = response
-        self.exception = exception
-
-    def json(self, data, *args, **kwargs):
-        return iserialize(data, **kwargs)
-
-    @link(url='', methods=['GET'])
-    def get(self, *args, **kwargs):
-        """
-        The principal GET handler for the RouteBuilder. All GET requests that are
-        structured like so:
-
-        `HTTP GET http://localhost:5000/<prefix>/<route-model>`
-
-        (Where your-blueprint represents a particular resource mapping).
-
-        Will be routed to this function. This will use the RouteBuilder DAO
-        and then fetch data for the assigned model. In this case, select all.
-
-        :return: response object with application/json content-type preset.
-        :rtype: HTTPSuccess
-        """
-
-        query = QueryBuffer(self.model).all()
-        return self.response(HTTPSuccess(self.json(query.data, **query.queryargs.__dict__)))
-
-    @link(url='/<resource>', methods=['HEAD'])
-    def head(self, resource):
-        query = QueryBuffer(self.model)
-        resp = query.one(self.key, resource)
-
-        if not resp:
-            return self.exception(HTTPNotFound())
-        return HTTPSuccess()
-
-    @link(url='/<resource>', methods=['GET'])
-    def one(self, resource, *args, **kwargs):
-        """
-        The principal GET by ID handler for the RouteBuilder. All GET requests
-        that are structured like so:
-
-        `HTTP GET http://localhost:5000/<prefix>/<route-model>/<uuid>`
-
-        (Where <your-blueprint> represents a particular resource mapping).
-
-        (Where <uuid> represents an database instance ID).
-
-        This will use the RouteBuilder DAO and then fetch data for the
-        assigned model. In this case, selecting only one, by UUID.
-
-        :return: response object with application/json content-type preset.
-        :rtype: Type[JsonResponse]
-        """
-
-        if isinstance(resource, str) and resource.endswith('/'):
-            resource = resource.split('/').pop(0)
-
-        query = QueryBuffer(self.model)
-        resp = query.one(self.key, resource)
-
-        if not resp:
-            return self.exception(HTTPNotFound())
-
-        return self.response(HTTPSuccess(self.json(query.data, **query.queryargs.__dict__)))
-
-    @link(url='/<resource>/<string:field>', methods=['GET'])
-    def one_child_resource(self, resource, field, *args, **kwargs):
-        query = QueryBuffer(self.model, auto=False).one(self.key, resource)
-        instance = query.one(self.key, resource).data
-        path = field.split('/')
-        prop = None
-
-        if not instance:
-            return self.exception(HTTPNotFound())
-
-        if len(path) > 1:
-            child = None
-            data = query.data
-            endpoint = path.pop()
-            for idx, item in enumerate(path):
-                if isinstance(data, int) or isinstance(data, str):
-                    raise HTTPBadRequest(msg='Cannot query this data type')
-                if isinstance(data, list):
-                    child = data[int(item)]
-                else:
-                    child = getattr(instance, item)
-            data = getattr(child, endpoint)
-            prop = endpoint
-        else:
-            prop = field
-            data = getattr(instance, field)
-
-        return HTTPSuccess({prop: data}, path=field.split('/'))
-
-    @link(url='/', methods=['POST'])
-    def post(self, *args, **kwargs):
-        payload = request.json
-        instance = self.dao.create(payload, **kwargs)
-        return HTTPCreated(self.json(instance))
-
-    @link(url='/<int:modelid>/<resource>/', methods=['POST'])
-    def post_child_resource(self, modelid, resource, *args, **kwargs):
-        instance = QueryBuffer(self.model).one(self.key, modelid).data
-        child = getattr(self.model.__mapper__.relationships, resource).entity.entity(**self._payload())
-        getattr(instance, resource).append(child)
-        dao = self.dao.save(instance)
-        return HTTPUpdated()
-
-    @link(url='/<int:modelid>', methods=['DELETE'])
-    def delete(self, modelid, *args, **kwargs):
-        if self.delete:
-            self.dao.delete(self.dao.one(modelid)) #, self.delete_flag)
-        else:
-            self.dao.delete(self.dao.one(modelid))
-        return HTTPDeleted()
-
-    @link(url='/counts/<int:modelid>', methods=['DELETE'])
-    def count(self):
-        pass
-
-    @link(url='/<int:modelid>', methods=['PUT'])
-    def put(self, modelid, *args, **kwargs):
-        query = QueryBuffer(self.model).one(self.key, modelid)
-        instance = query.data
-        self.dao.update(instance, self._payload())
-        return HTTPUpdated(iserialize(instance))

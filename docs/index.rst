@@ -18,10 +18,13 @@ are often esoteric and difficult to engineer for small projects.
 
 This library also contains a few helpers and other utilities that I have found helpful.
 
+This library depends on SQLAlchemyBlender and HandyHTTP for extended features.
+
 
 .. toctree::
     installation
     basic
+    customisations/customisation.md
     recipes
 
 

@@ -51,7 +51,7 @@ class TestExtensions(unittest.TestCase):
         encoder = ModelEncoder()
         with self.app.app_context():
             data = encoder.default(db.session.query(ExampleModel).all())
-            self.assertEqual(data, [{'id': 1, 'related_id': None, 'label': 'test'}])
+            self.assertEqual(data, [{'id': 1, 'related_id': None, 'label': 'test', 'state': 'Y'}])
 
     def test_flask_json_subclass(self):
         client = self.app.test_client()

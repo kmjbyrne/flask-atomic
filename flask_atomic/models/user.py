@@ -4,7 +4,7 @@ from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
 from sqlalchemy_blender.database import db
-from flask_atomic.builder.dao import ModelDAO
+from flask_atomic.dao import ModelDAO
 from flask_atomic.orm.mixins.columns import CreationTimestampMixin
 from flask_atomic.orm.mixins.columns import PrimaryKeyMixin
 

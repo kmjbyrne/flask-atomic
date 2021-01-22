@@ -2,16 +2,14 @@ from datetime import datetime
 
 from flask import current_app
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy_blender.helpers import columns
 from sqlalchemy_blender.helpers import relationships
-from sqlalchemy_blender.helpers import primarykey
-
-from flask_atomic.database import db
 
 from handyhttp.exceptions import HTTPConflict
-from handyhttp.exceptions import HTTPBadRequest
 from handyhttp.exceptions import HTTPNotFound
 from handyhttp.exceptions import HTTPNotProcessable
+from handyhttp.exceptions import HTTPBadRequest
 
 
 def getsession():
@@ -21,9 +19,16 @@ def getsession():
 
 class ModelDAO:
 
-    def __init__(self, model=None, autoupdate=True, *args, **kwargs):
+    def __init__(self, model=None, autoupdate=True, session=None, *args, **kwargs):
         self.model = model
         self.autoupdate = autoupdate
+        self.__session = session
+
+    def session(self):
+        if not self.__session:
+            db = current_app.extensions['sqlalchemy'].db
+            return db.session
+        return self.session()
 
     def one(self, value, key=None):
         if not key:
@@ -39,16 +44,14 @@ class ModelDAO:
         for item in payload:
             if not getattr(self.model, item, None):
                 invalid_fields.append(item)
-        if list(filter(lambda field: not field.startswith('_'), invalid_fields)):
+        if invalid_fields:
             err = f'<{invalid_fields}> not accepted fields'
-            raise HTTPBadRequest(err)
+            raise HTTPBadRequest(msg=err)
 
-        for item in  [i for i in payload.keys() if i.startswith('_')]:
-            del payload[item]
         return True
 
     def commit(self, operation, instance):
-        session = getsession()
+        session = self.session()
         try:
             session = current_app.extensions['sqlalchemy'].db.session
             getattr(session, operation)(instance)
@@ -59,6 +62,9 @@ class ModelDAO:
             if exc.orig.args[0] == 1452:
                 raise HTTPNotProcessable()
             raise HTTPConflict(str(exc.orig.args[1]))
+        except ProgrammingError as exc:
+            if exc.orig.args[0] == 1064:
+                raise HTTPNotProcessable(str(exc))
         except Exception as exc:
             session = current_app.extensions['sqlalchemy'].db.session
             try:
@@ -80,6 +86,9 @@ class ModelDAO:
         return self.commit('delete', instance)
 
     def save(self, instance):
+        if self.autoupdate:
+            if getattr(instance, 'updated', None):
+                setattr(instance, 'updated', datetime.now())
         self.commit('add', instance)
         return instance
 
@@ -89,26 +98,20 @@ class ModelDAO:
         _keys = set([key for key in payload.keys() if not key.startswith('__')])
         for item in set([i.key for i in relationships(self.model)]).intersection(_keys):
             actual = getattr(relationships(self.model), item).primaryjoin.right.name
-            _payload[actual] = None
-            _payload[item] = None
-            if isinstance(payload.get(item), list):
-                current = payload.get(item)
-                _payload[actual] = []
-                for data in payload.get(item):
-                    pk = primarykey(getattr(relationships(self.model), item).entity.entity)
-                    # current.get(primarykey(getattr(relationships(self.model), item).entity.entity))
-                    _payload[actual].append(data.get(pk))
-            else:
-                _payload[actual] = payload.get(item).get(primarykey(getattr(relationships(self.model), item).entity.entity))
+            _payload[actual] = payload.get(item)
             _payload[item] = payload.get(item)
             del payload[item]
-        instance = self.model(**payload)
 
+        instance = self.model(**payload)
         if 'user' in kwargs.keys() and 'creator_id' in columns(self.model, strformat=True):
             instance.creator_id = kwargs.get('user')
 
         self.update(instance, _payload)
-        return self.save(instance)
+        self.save(instance)
+        return instance
+
+    def remove(self, instance, item):
+        getattr(instance, item).remove(item)
 
     def update(self, instance, payload, **kwargs):
         fields = columns(instance, strformat=True)
@@ -117,14 +120,12 @@ class ModelDAO:
             if attr != 'id' and attr in fields:
                 if str(getattr(instance.__mapper__.columns, attr).type) == 'DATETIME' and isinstance(value, bool):
                     value = datetime.now()
-                # only change fields with a value delta
-                if getattr(instance, attr) != value:
-                    setattr(instance, attr, value)
+                setattr(instance, attr, value)
 
         for mtm in set([i.key for i in rels]).intersection(set(payload.keys())):
             model = getattr(instance, mtm)
 
-            if not model:
+            if not model and not isinstance(model, list):
                 _instance = getattr(instance.__mapper__.relationships, mtm).entity.entity
                 _lookup = mtm
 
@@ -138,21 +139,30 @@ class ModelDAO:
                 continue
 
             if not isinstance(model, list):
-                setattr(instance, mtm, model)
+                _instance = getattr(instance.__mapper__.relationships, mtm).entity.entity
+
+                _lookup = value
+                if not isinstance(value, int):
+                    _lookup = payload.get(mtm).get('id', None)
+                elem = self.session().query(_instance).get(_lookup)
+                setattr(instance, mtm, elem)
                 continue
-            current = set(map(lambda rel: getattr(rel, rel.identify_primary_key()), model))
-            candidates = set(map(lambda item: list(item.values()).pop(), kwargs[mtm]))
+
+            # current = set(map(lambda rel: getattr(rel, rel[0].__mapper__.primary_key[0].name), model))
+            current = set(map(lambda item: getattr(item, 'id'), model))
+            candidates = set(map(lambda item: item.get('id'), payload[mtm]))
             for addition in candidates.difference(current):
-                association = self.session().query(instance.__mapper__.relationships.classgroups.entity).get(addition)
+                association = self.session().query(
+                    getattr(instance.__mapper__.relationships, mtm).entity
+                ).get(addition)
                 getattr(instance, mtm).append(association)
 
             for removal in current.difference(candidates):
-                association = self.session().query(instance.__mapper__.relationships.classgroups.entity).get(removal)
+                association = self.session().query(
+                    getattr(instance.__mapper__.relationships, mtm).entity
+                ).get(removal)
                 getattr(instance, mtm).remove(association)
 
-        if self.autoupdate:
-            if getattr(instance, 'updated', None):
-                setattr(instance, 'updated', datetime.now())
         self.save(instance)
         return instance
 
