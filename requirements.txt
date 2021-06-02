@@ -63,7 +63,7 @@ SQLAlchemyBlender==0.1.9
 tornado==6.0.3
 tqdm==4.42.0
 twine==3.1.1
-urllib3==1.25.8
+urllib3==1.26.5
 watchdog==0.9.0
 webencodings==0.5.1
 Werkzeug==0.16.0
