@@ -44,7 +44,7 @@ PyYAML==5.2
 readme-renderer==24.0
 requests==2.22.0
 requests-toolbelt==0.9.1
-rsa==3.4.2
+rsa==4.7
 s3transfer==0.3.2
 six==1.14.0
 snowballstemmer==2.0.0
